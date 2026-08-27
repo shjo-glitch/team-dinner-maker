@@ -9,10 +9,14 @@
 </head>
 <body>
   <div class="wrap">
-    <h1 class="site-title"><a href="/">🍻 회식 날짜 잡기</a></h1>
+    <header class="event-site-head">
+      <p class="eyebrow"><span></span>DATE SOCIAL CLUB</p>
+      <h1 class="site-title"><a href="/"><span class="title-mark">●</span>회식 날짜 잡기</a></h1>
+    </header>
 
     <div id="app" hidden>
       <div class="event-head">
+        <p class="section-kicker">THE GATHERING</p>
         <h1 id="event-title"></h1>
         <div class="event-meta">
           <span class="chip" id="event-theme"></span>
@@ -72,9 +76,9 @@
           <h2>날짜별 가능 인원</h2>
           <div id="result-calendar"></div>
           <div class="legend">
-            <span><span class="swatch" style="background: rgba(122,16,37,0.25)"></span>적게 겹침</span>
-            <span><span class="swatch" style="background: rgba(122,16,37,1)"></span>많이 겹침 (1명당 1/참여자 수씩 진해져요)</span>
-            <span><span class="swatch" style="background: rgba(122,16,37,0.8); box-shadow: 0 0 0 2px #ffc933; width: 12px; height: 12px; border-radius: 50%;"></span>가장 많이 겹친 날</span>
+            <span><span class="swatch swatch-low"></span>적게 겹침</span>
+            <span><span class="swatch swatch-high"></span>많이 겹침 (1명당 1/참여자 수씩 진해져요)</span>
+            <span><span class="swatch swatch-top"></span>가장 많이 겹친 날</span>
           </div>
         </div>
 

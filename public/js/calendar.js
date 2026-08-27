@@ -1,10 +1,10 @@
 // 달력 컴포넌트.
 // 약속의 표시 범위(startDate~endDate)에 포함된 모든 달을 수직으로 이어서 렌더링한다.
 // mode: 'select' — 참여자가 가능한 날짜를 클릭/드래그(+스크롤)로 선택
-// mode: 'result' — 인원수에 따라 뱃지(#7A1025)의 알파값이 진해지는 결과 화면
+// mode: 'result' — 인원수에 따라 뱃지(#9C3024)의 알파값이 진해지는 결과 화면
 'use strict';
 
-const CAL_BADGE_RGB = '122, 16, 37'; // #7A1025
+const CAL_BADGE_RGB = '156, 48, 36'; // #9C3024
 const CAL_DOW_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
 
 function calFmt(y, m, d) {
@@ -114,6 +114,7 @@ class Calendar {
       if (!this.inRange(dateStr)) classes.push('out-range');
       let badgeStyle = '';
       let countHtml = '';
+      let sparkleHtml = '';
 
       if (this.mode === 'select') {
         if (!selectable) classes.push('disabled');
@@ -124,7 +125,10 @@ class Calendar {
           const alpha = Math.min(1, count / this.totalCount);
           classes.push('has-count');
           if (alpha >= 0.45) classes.push('badge-light-text');
-          if (count === maxCount) classes.push('top-pick'); // 공동 1등 포함 노란 테두리
+          if (count === maxCount) {
+            classes.push('top-pick'); // 공동 1등 포함 골드 링 + 4방향 스파클
+            sparkleHtml = '<span class="top-pick-spark top-pick-spark-upper" aria-hidden="true"></span><span class="top-pick-spark top-pick-spark-lower" aria-hidden="true"></span>';
+          }
           badgeStyle = ` style="background: rgba(${CAL_BADGE_RGB}, ${alpha.toFixed(3)})"`;
           countHtml = `<span class="cal-count">${count}명</span>`;
         }
@@ -133,7 +137,7 @@ class Calendar {
 
       html += `
         <div class="${classes.join(' ')}" data-date="${dateStr}">
-          <span class="cal-day"${badgeStyle}>${d}</span>
+          <span class="cal-day"${badgeStyle}>${d}${sparkleHtml}</span>
           ${holiday ? `<span class="cal-holiday">${holiday}</span>` : ''}
           ${countHtml}
         </div>`;

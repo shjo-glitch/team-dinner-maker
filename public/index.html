@@ -9,11 +9,20 @@
 </head>
 <body>
   <div class="wrap">
-    <h1 class="site-title">🍻 회식 날짜 잡기</h1>
-    <p class="site-sub">약속을 만들고 링크를 공유하면, 모두가 되는 날짜가 한눈에 보여요.</p>
+    <header class="landing-head">
+      <p class="eyebrow"><span></span>DATE SOCIAL CLUB</p>
+      <h1 class="site-title"><span class="title-mark">●</span>회식 날짜 잡기</h1>
+      <p class="site-sub">약속을 만들고 링크를 보내세요.<br />모두가 되는 날이 한눈에 모입니다.</p>
+    </header>
 
     <form class="card" id="create-form">
-      <h2>새 약속 만들기</h2>
+      <div class="form-title-row">
+        <div>
+          <p class="section-kicker">01 · START HERE</p>
+          <h2>새로운 약속</h2>
+        </div>
+        <span class="form-stamp" aria-hidden="true">🍷</span>
+      </div>
 
       <div class="field">
         <label for="title">약속 이름</label>
@@ -27,7 +36,7 @@
       </div>
 
       <div class="field">
-        <label>표시 범위</label>
+        <label>언제까지 열어둘까요?</label>
         <div class="theme-picker">
           <span>
             <input type="radio" name="range" id="range-this" value="this-month" checked />
@@ -47,7 +56,7 @@
       </div>
 
       <div class="field">
-        <label>약속 테마</label>
+        <label>어떤 날에 만날까요?</label>
         <div class="theme-picker">
           <span>
             <input type="radio" name="theme" id="theme-weekday" value="weekday" />
@@ -64,7 +73,7 @@
         </div>
       </div>
 
-      <button type="submit" class="btn block">약속 만들기</button>
+      <button type="submit" class="btn block"><span>약속 만들기</span><span aria-hidden="true">→</span></button>
       <p class="error-msg" id="create-error"></p>
     </form>
   </div>
