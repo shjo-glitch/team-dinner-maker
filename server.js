@@ -135,7 +135,12 @@ async function handleApi(req, res, url) {
     const idx = event.participants.findIndex((p) => p.name === name);
     const entry = { name, dates, updatedAt: new Date().toISOString() };
     if (idx >= 0) event.participants[idx] = entry;
-    else event.participants.push(entry);
+    else {
+      if (event.participants.length >= event.totalCount) {
+        return sendJson(res, 400, { error: `참여자는 총원 ${event.totalCount}명을 초과해 등록할 수 없습니다.` });
+      }
+      event.participants.push(entry);
+    }
     saveEvent(event);
     return sendJson(res, 200, event);
   }

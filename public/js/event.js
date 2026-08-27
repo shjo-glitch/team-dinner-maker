@@ -16,6 +16,7 @@ const THEME_LABELS = {
 let eventData = null;
 let voteCal = null;
 let resultCal = null;
+let activeParticipantName = null;
 
 function $(id) {
   return document.getElementById(id);
@@ -65,6 +66,37 @@ function renderHead() {
   $('event-progress').textContent = `참여 ${eventData.participants.length}명 / 총원 ${eventData.totalCount}명`;
 }
 
+function isAtCapacity() {
+  return eventData.participants.length >= eventData.totalCount;
+}
+
+function syncNameInputState() {
+  const nameInput = $('name');
+  const hint = $('name-hint');
+  const atCapacity = isAtCapacity();
+
+  nameInput.disabled = atCapacity;
+  if (activeParticipantName) {
+    nameInput.placeholder = `${activeParticipantName} 님 일정 수정 중`;
+    hint.textContent = `${activeParticipantName} 님의 일정을 수정 중이에요. 선택한 날짜를 저장하면 반영됩니다.`;
+  } else if (atCapacity) {
+    nameInput.value = '';
+    nameInput.placeholder = '총원 등록 완료';
+    hint.textContent = `총원 ${eventData.totalCount}명이 모두 등록됐어요. 참여자 이름을 선택하면 일정을 수정할 수 있어요.`;
+  } else {
+    nameInput.placeholder = '이름을 입력하세요';
+    hint.textContent = '이름을 입력한 뒤 엔터를 누르면 참여자로 등록돼요. 일정 수정은 아래 참여자 이름을 선택해 주세요.';
+  }
+}
+
+function updateSaveState() {
+  const hasScheduleOwner = Boolean(activeParticipantName || $('name').value.trim());
+  const hasSelectedDates = voteCal && voteCal.selected.size > 0;
+  const disabled = !hasScheduleOwner || !hasSelectedDates;
+  $('save-btn').disabled = disabled;
+  $('float-save-btn').disabled = disabled;
+}
+
 function renderVotePeople() {
   const wrap = $('vote-people');
   if (eventData.participants.length === 0) {
@@ -73,11 +105,14 @@ function renderVotePeople() {
   }
   wrap.innerHTML = eventData.participants
     .map(
-      (p) => `
-        <span class="person-chip" data-name="${esc(p.name)}">
+      (p) => {
+        const active = p.name === activeParticipantName;
+        return `
+        <span class="person-chip${active ? ' active' : ''}" data-name="${esc(p.name)}" role="button" tabindex="0" aria-pressed="${active}">
           ${esc(p.name)}
           <button type="button" class="del" data-del="${esc(p.name)}" title="삭제">✕</button>
-        </span>`
+        </span>`;
+      }
     )
     .join('');
 }
@@ -118,10 +153,7 @@ function updateSelectedCount(n) {
   const text = `선택한 날짜: ${n}일`;
   $('selected-count').textContent = text;
   $('float-count').textContent = text;
-  // 선택한 날짜가 없으면 저장하기 버튼 비활성화 (이름만 등록은 이름 입력란에서 엔터로 가능)
-  const disabled = n === 0;
-  $('save-btn').disabled = disabled;
-  $('float-save-btn').disabled = disabled;
+  updateSaveState();
 }
 
 function switchTab(tab) {
@@ -137,10 +169,14 @@ async function saveMySchedule() {
   const infoEl = $('vote-info');
   errorEl.textContent = '';
   infoEl.textContent = '';
-  const name = $('name').value.trim();
+  const name = activeParticipantName || $('name').value.trim();
   if (!name) {
-    errorEl.textContent = '이름을 입력해 주세요.';
+    errorEl.textContent = '이름을 입력하거나 참여자 이름을 선택해 주세요.';
     $('name').focus();
+    return;
+  }
+  if (!activeParticipantName && eventData.participants.some((participant) => participant.name === name)) {
+    errorEl.textContent = '이미 등록된 이름이에요. 참여자 이름을 선택해 일정을 수정해 주세요.';
     return;
   }
   const dates = [...voteCal.selected];
@@ -160,12 +196,20 @@ async function saveMySchedule() {
     if (dates.length > 0) {
       // 다음 사람이 이어서 등록할 수 있게 이름과 선택을 즉시 비운다.
       $('name').value = '';
+      activeParticipantName = null;
       voteCal.setSelected([]);
+      renderVotePeople();
+      syncNameInputState();
       updateSelectedCount(0);
       switchTab('result');
     } else {
-      // 날짜 없이 이름만 등록: 등록 탭에 남아 이어서 날짜를 선택할 수 있게 한다.
-      infoEl.textContent = `'${name}' 님이 참여자로 등록됐어요. 가능한 날짜를 선택하고 다시 저장하면 반영돼요.`;
+      // 날짜 없이 엔터 등록한 뒤에는 이름 입력칸을 비우고, 참여자 뱃지로 일정 수정을 시작한다.
+      $('name').value = '';
+      activeParticipantName = null;
+      renderVotePeople();
+      syncNameInputState();
+      voteCal.render();
+      infoEl.textContent = `'${name}' 님이 참여자로 등록됐어요. 이름 뱃지를 선택해 가능한 날짜를 등록해 주세요.`;
     }
   } catch (err) {
     errorEl.textContent = err.message;
@@ -175,13 +219,33 @@ async function saveMySchedule() {
   }
 }
 
+function activateParticipant(name) {
+  const participant = eventData.participants.find((p) => p.name === name);
+  if (!participant) return;
+
+  activeParticipantName = participant.name;
+  $('name').value = '';
+  voteCal.setSelected(participant.dates);
+  renderVotePeople();
+  syncNameInputState();
+  updateSelectedCount(participant.dates.length);
+}
+
 async function deleteParticipant(name) {
   if (!confirm(`'${name}' 님의 일정을 삭제할까요?`)) return;
   const res = await fetch(`/api/events/${eventId}/participants?name=${encodeURIComponent(name)}`, { method: 'DELETE' });
   if (res.ok) {
     eventData = await res.json();
+    if (activeParticipantName === name) {
+      activeParticipantName = null;
+      $('name').value = '';
+      voteCal.setSelected([]);
+    }
     renderHead();
     renderVotePeople();
+    syncNameInputState();
+    voteCal.render();
+    updateSelectedCount(voteCal.selected.size);
   }
 }
 
@@ -202,6 +266,7 @@ async function init() {
     mode: 'select',
     startDate: range.startDate,
     endDate: range.endDate,
+    canSelect: () => Boolean(activeParticipantName || $('name').value.trim()),
     onChange: (sel) => {
       updateSelectedCount(sel.size);
     },
@@ -220,17 +285,30 @@ async function init() {
 
   renderHead();
   renderVotePeople();
+  syncNameInputState();
 
   $('tab-vote').addEventListener('click', () => switchTab('vote'));
   $('tab-result').addEventListener('click', () => switchTab('result'));
   $('save-btn').addEventListener('click', saveMySchedule);
 
-  // 이름 입력란에서 엔터를 치면 바로 등록
+  // 새 이름은 엔터로 참여자만 먼저 등록하고, 입력칸은 바로 비운다.
   $('name').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.isComposing) {
       e.preventDefault();
       saveMySchedule();
     }
+  });
+
+  // 기존 참여자를 선택한 뒤 새 이름을 입력하면 새 참여자 등록 흐름으로 전환한다.
+  $('name').addEventListener('input', () => {
+    if (activeParticipantName) {
+      activeParticipantName = null;
+      voteCal.setSelected([]);
+      renderVotePeople();
+      syncNameInputState();
+    }
+    voteCal.render();
+    updateSaveState();
   });
 
   // 저장하기 버튼이 화면에서 벗어나면 하단 플로팅 저장 바를 띄운다.
@@ -254,7 +332,7 @@ async function init() {
     setTimeout(() => ($('copy-link').textContent = '🔗 참여 링크 복사'), 1500);
   });
 
-  // 참여자 칩: 클릭 → 일정 불러오기, ✕ → 삭제
+  // 참여자 칩: 클릭 → 일정 수정 활성화, ✕ → 삭제
   $('vote-people').addEventListener('click', (e) => {
     const del = e.target.closest('[data-del]');
     if (del) {
@@ -263,12 +341,16 @@ async function init() {
     }
     const chip = e.target.closest('.person-chip[data-name]');
     if (chip) {
-      const p = eventData.participants.find((x) => x.name === chip.dataset.name);
-      if (p) {
-        $('name').value = p.name;
-        voteCal.setSelected(p.dates);
-        updateSelectedCount(p.dates.length);
-      }
+      activateParticipant(chip.dataset.name);
+    }
+  });
+
+  $('vote-people').addEventListener('keydown', (e) => {
+    if (e.target.closest('[data-del]')) return;
+    const chip = e.target.closest('.person-chip[data-name]');
+    if (chip && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      activateParticipant(chip.dataset.name);
     }
   });
 }

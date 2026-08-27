@@ -34,6 +34,7 @@ class Calendar {
     this.endDate = opts.endDate;
     this.onChange = opts.onChange || null;
     this.onDateClick = opts.onDateClick || null;
+    this.canSelect = opts.canSelect || (() => true);
 
     this.selected = new Set(); // select 모드: 'YYYY-MM-DD'
     this.counts = {}; // result 모드: dateStr -> 선택 인원수
@@ -61,7 +62,7 @@ class Calendar {
   }
 
   isSelectable(dateStr, dow) {
-    return this.inRange(dateStr) && dateStr >= calToday() && this.themeAllows(dow);
+    return this.inRange(dateStr) && dateStr >= calToday() && this.themeAllows(dow) && this.canSelect();
   }
 
   setSelected(dates) {

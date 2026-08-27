@@ -36,7 +36,12 @@ export async function onRequestPut({ request, params, env }) {
   const entry = { name, dates: [...new Set(dates.map(String))].sort(), updatedAt: new Date().toISOString() };
   const idx = event.participants.findIndex((p) => p.name === name);
   if (idx >= 0) event.participants[idx] = entry;
-  else event.participants.push(entry);
+  else {
+    if (event.participants.length >= event.totalCount) {
+      return Response.json({ error: `참여자는 총원 ${event.totalCount}명을 초과해 등록할 수 없습니다.` }, { status: 400 });
+    }
+    event.participants.push(entry);
+  }
 
   await saveEvent(env, event);
   return Response.json(event);
