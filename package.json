@@ -1,0 +1,15 @@
+{
+  "name": "team-dinner-maker",
+  "version": "1.0.0",
+  "description": "회식 날짜 잡기 - 팀 회식 날짜를 정하는 간단한 웹 페이지",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "pages:dev": "npx wrangler pages dev public",
+    "pages:deploy": "npx wrangler pages deploy public --project-name=team-dinner-maker"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.9.0"
+  }
+}

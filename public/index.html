@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>회식 날짜 잡기</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍻</text></svg>" />
+</head>
+<body>
+  <div class="wrap">
+    <h1 class="site-title">🍻 회식 날짜 잡기</h1>
+    <p class="site-sub">약속을 만들고 링크를 공유하면, 모두가 되는 날짜가 한눈에 보여요.</p>
+
+    <form class="card" id="create-form">
+      <h2>새 약속 만들기</h2>
+
+      <div class="field">
+        <label for="title">약속 이름</label>
+        <input type="text" id="title" placeholder="예) 8월 팀 회식" maxlength="60" required />
+      </div>
+
+      <div class="field">
+        <label for="total">총 인원</label>
+        <input type="number" id="total" min="2" max="100" placeholder="예) 8" required />
+        <p class="hint">참여 현황(참여 n명 / 총원 m명) 표시에 사용돼요.</p>
+      </div>
+
+      <div class="field">
+        <label>표시 범위</label>
+        <div class="theme-picker">
+          <span>
+            <input type="radio" name="range" id="range-this" value="this-month" checked />
+            <label class="theme-opt" for="range-this">이번달<small>오늘 ~ 이번 달 말일</small></label>
+          </span>
+          <span>
+            <input type="radio" name="range" id="range-next" value="next-month" />
+            <label class="theme-opt" for="range-next">다음달<small>다음 달 1일 ~ 말일</small></label>
+          </span>
+          <span>
+            <input type="radio" name="range" id="range-custom" value="custom" />
+            <label class="theme-opt" for="range-custom">특정 날짜까지<small>오늘 ~ 지정한 날짜</small></label>
+          </span>
+        </div>
+        <input type="date" id="range-end" hidden style="margin-top: 8px;" />
+        <p class="hint">달력에 표시되고 선택할 수 있는 날짜 범위예요.</p>
+      </div>
+
+      <div class="field">
+        <label>약속 테마</label>
+        <div class="theme-picker">
+          <span>
+            <input type="radio" name="theme" id="theme-weekday" value="weekday" />
+            <label class="theme-opt" for="theme-weekday">평일 약속<small>주말 선택 불가</small></label>
+          </span>
+          <span>
+            <input type="radio" name="theme" id="theme-weekend" value="weekend" />
+            <label class="theme-opt" for="theme-weekend">주말 약속<small>평일 선택 불가</small></label>
+          </span>
+          <span>
+            <input type="radio" name="theme" id="theme-both" value="both" checked />
+            <label class="theme-opt" for="theme-both">평일+주말<small>모든 요일 가능</small></label>
+          </span>
+        </div>
+      </div>
+
+      <button type="submit" class="btn block">약속 만들기</button>
+      <p class="error-msg" id="create-error"></p>
+    </form>
+  </div>
+
+  <script src="/js/index.js"></script>
+</body>
+</html>

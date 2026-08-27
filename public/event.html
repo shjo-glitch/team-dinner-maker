@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>회식 날짜 잡기</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍻</text></svg>" />
+</head>
+<body>
+  <div class="wrap">
+    <h1 class="site-title"><a href="/">🍻 회식 날짜 잡기</a></h1>
+
+    <div id="app" hidden>
+      <div class="event-head">
+        <h1 id="event-title"></h1>
+        <div class="event-meta">
+          <span class="chip" id="event-theme"></span>
+          <span class="chip" id="event-range"></span>
+          <span class="chip" id="event-progress"></span>
+        </div>
+        <div class="toolbar">
+          <button type="button" class="btn ghost small" id="copy-link">🔗 참여 링크 복사</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button type="button" id="tab-vote" class="active">📅 내 일정 등록</button>
+        <button type="button" id="tab-result">📊 결과 보기</button>
+      </div>
+
+      <!-- 내 일정 등록 -->
+      <section id="panel-vote">
+        <div class="card">
+          <div class="field">
+            <label for="name">이름</label>
+            <input type="text" id="name" placeholder="이름을 입력하세요" maxlength="20" />
+            <p class="hint">이미 등록한 이름을 입력하면 일정을 수정할 수 있어요. 아래 참여자 이름을 눌러도 불러와져요.</p>
+          </div>
+          <div class="field" id="vote-people-wrap">
+            <label>참여자</label>
+            <div class="people-list" id="vote-people"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>가능한 날짜를 선택하세요</h2>
+          <p class="hint" style="margin-bottom: 12px;">
+            날짜를 클릭하거나, <b>누른 채로 드래그하면 시작일~끝일 범위가 한 번에</b> 선택돼요.
+            드래그 중 화면 가장자리로 가면 자동으로 스크롤되어 다음 달까지 이어서 선택할 수 있어요.
+            이미 선택된 날짜에서 드래그를 시작하면 범위가 해제돼요.
+          </p>
+          <div id="vote-calendar"></div>
+          <p class="selected-count" id="selected-count">선택한 날짜: 0일</p>
+          <div class="save-row">
+            <button type="button" class="btn block" id="save-btn">저장하기</button>
+            <p class="error-msg" id="vote-error"></p>
+            <p class="info-msg" id="vote-info"></p>
+          </div>
+        </div>
+
+        <!-- 저장하기 버튼이 화면 밖에 있을 때 나타나는 플로팅 저장 바 -->
+        <div class="float-save" id="float-save" hidden>
+          <span class="float-count" id="float-count">선택한 날짜: 0일</span>
+          <button type="button" class="btn" id="float-save-btn">저장하기</button>
+        </div>
+      </section>
+
+      <!-- 결과 보기 -->
+      <section id="panel-result" hidden>
+        <div class="card">
+          <h2>날짜별 가능 인원</h2>
+          <div id="result-calendar"></div>
+          <div class="legend">
+            <span><span class="swatch" style="background: rgba(122,16,37,0.25)"></span>적게 겹침</span>
+            <span><span class="swatch" style="background: rgba(122,16,37,1)"></span>많이 겹침 (1명당 1/참여자 수씩 진해져요)</span>
+            <span><span class="swatch" style="background: rgba(122,16,37,0.8); box-shadow: 0 0 0 2px #ffc933; width: 12px; height: 12px; border-radius: 50%;"></span>가장 많이 겹친 날</span>
+          </div>
+        </div>
+
+        <div class="card date-detail" id="date-detail" hidden>
+          <h3 id="detail-title"></h3>
+          <div class="group">
+            <b>가능 (<span id="detail-ok-count">0</span>명)</b>
+            <div id="detail-ok"></div>
+          </div>
+          <div class="group">
+            <b>미응답/불가</b>
+            <div id="detail-no"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>참여자 (<span id="result-people-count">0</span>명)</h2>
+          <div class="people-list" id="result-people"></div>
+        </div>
+      </section>
+    </div>
+
+    <div id="not-found" class="card" hidden>
+      <h2>약속을 찾을 수 없어요</h2>
+      <p class="empty-note">링크가 정확한지 확인해 주세요.</p>
+      <p style="margin-top: 14px;"><a class="btn small" href="/">새 약속 만들기</a></p>
+    </div>
+  </div>
+
+  <script src="/js/holidays.js"></script>
+  <script src="/js/calendar.js"></script>
+  <script src="/js/event.js"></script>
+</body>
+</html>

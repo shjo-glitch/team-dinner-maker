@@ -1,0 +1,9 @@
+name = "team-dinner-maker"
+compatibility_date = "2026-01-01"
+pages_build_output_dir = "public"
+
+# 데이터 저장소: Cloudflare D1 (events 테이블에 약속별 JSON 저장)
+[[d1_databases]]
+binding = "DB"
+database_name = "team-dinner-maker-db"
+database_id = "197b4252-867d-42ed-96a0-215091959117"
