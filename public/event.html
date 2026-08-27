@@ -72,6 +72,14 @@
 
       <!-- 결과 보기 -->
       <section id="panel-result" hidden>
+        <section class="card candidate-ranking" aria-labelledby="candidate-ranking-title">
+          <div class="candidate-ranking-head">
+            <p class="section-kicker">THE SHORTLIST</p>
+            <h2 id="candidate-ranking-title">회식 날 후보 순위</h2>
+          </div>
+          <div class="candidate-ranking-list" id="candidate-ranking" aria-live="polite"></div>
+        </section>
+
         <div class="card">
           <h2>날짜별 가능 인원</h2>
           <div id="result-calendar"></div>

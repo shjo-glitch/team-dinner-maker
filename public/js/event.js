@@ -40,6 +40,39 @@ function buildCounts() {
   return counts;
 }
 
+function formatCandidateDate(dateStr) {
+  const [, month, day] = dateStr.split('-').map(Number);
+  return `${month}/${day}`;
+}
+
+function renderCandidateRanking(counts) {
+  const rankingEl = $('candidate-ranking');
+  const rankedDates = Object.entries(counts)
+    .filter(([, count]) => count > 0)
+    .sort(([dateA, countA], [dateB, countB]) => countB - countA || dateA.localeCompare(dateB));
+  const topCounts = [...new Set(rankedDates.map(([, count]) => count))].slice(0, 3);
+
+  if (topCounts.length === 0) {
+    rankingEl.innerHTML = '<p class="candidate-ranking-empty">아직 등록된 일정이 없어요.</p>';
+    return;
+  }
+
+  rankingEl.innerHTML = topCounts
+    .map((count, index) => {
+      const dates = rankedDates
+        .filter(([, dateCount]) => dateCount === count)
+        .map(([date]) => formatCandidateDate(date))
+        .join(', ');
+      const rank = index + 1;
+      return `
+        <div class="candidate-ranking-row rank-${rank}">
+          <span class="candidate-rank-label">${rank}위</span>
+          <span class="candidate-rank-dates">${dates}</span>
+        </div>`;
+    })
+    .join('');
+}
+
 // 예전 데이터(범위 없이 생성된 약속)는 오늘~다음 달 말일을 기본 범위로 사용
 function eventRange() {
   if (eventData.startDate && eventData.endDate) {
@@ -121,6 +154,7 @@ function renderResult() {
   const counts = buildCounts();
   // 뱃지 농도: 1명이 선택할 때마다 (1/참여자 수)씩 진해진다.
   resultCal.setResult(counts, eventData.participants.length);
+  renderCandidateRanking(counts);
 
   $('result-people-count').textContent = eventData.participants.length;
   const wrap = $('result-people');
