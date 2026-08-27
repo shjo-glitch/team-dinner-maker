@@ -1,6 +1,12 @@
 'use strict';
 
-const eventId = new URLSearchParams(location.search).get('id');
+// 참여 링크는 /m/<id> 형태. 예전 형식(/event.html?id=<id>)도 계속 지원한다.
+const eventId = (location.pathname.match(/^\/m\/([a-z0-9]+)$/) || [])[1] || new URLSearchParams(location.search).get('id');
+
+// 예전 형식으로 들어왔으면 주소창을 /m/<id> 로 정리 (참여 링크 복사 버튼이 새 형식을 복사하도록)
+if (eventId && !location.pathname.startsWith('/m/')) {
+  history.replaceState(null, '', `/m/${eventId}`);
+}
 const THEME_LABELS = {
   weekday: '평일 약속 (주말 선택 불가)',
   weekend: '주말 약속 (평일 선택 불가)',

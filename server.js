@@ -156,6 +156,8 @@ async function handleApi(req, res, url) {
 function serveStatic(req, res, url) {
   let filePath = decodeURIComponent(url.pathname);
   if (filePath === '/') filePath = '/index.html';
+  // 참여 링크 엔트리포인트: /m/<id> → event.html (id는 클라이언트에서 경로로부터 읽음)
+  if (/^\/m\/[a-z0-9]+$/.test(filePath)) filePath = '/event.html';
   const resolved = path.join(PUBLIC_DIR, filePath);
   if (!resolved.startsWith(PUBLIC_DIR)) {
     res.writeHead(403);

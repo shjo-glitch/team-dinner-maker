@@ -82,7 +82,9 @@ npx wrangler pages deploy public --project-name=team-dinner-maker --branch=main
 
 ![약속 만들기 화면](images/01-create-event.png)
 
-만들기가 끝나면 약속 페이지(`/event.html?id=...`)로 이동합니다.
+만들기가 끝나면 약속 페이지(`/m/<약속ID>`)로 이동합니다.
+참여 링크는 ID가 쿼리스트링으로 노출되는 형태가 아니라 `https://.../m/88389d` 같은 짧은 경로 형태입니다.
+(예전 형식인 `/event.html?id=...`로 들어와도 자동으로 `/m/<약속ID>`로 정리됩니다.)
 
 ## 2. 링크 공유하기
 
@@ -157,7 +159,8 @@ npx wrangler pages deploy public --project-name=team-dinner-maker --branch=main
 ```
 ├── public/                  # 정적 프론트엔드 (Cloudflare Pages 빌드 출력)
 │   ├── index.html           #   약속 만들기 화면
-│   ├── event.html           #   약속 페이지 (일정 등록 / 결과 보기)
+│   ├── event.html           #   약속 페이지 (일정 등록 / 결과 보기, /m/<id> 로 접근)
+│   ├── _redirects           #   /m/* → 약속 페이지 rewrite (Cloudflare Pages)
 │   ├── css/style.css
 │   └── js/
 │       ├── holidays.js      #   대한민국 법정 공휴일 데이터 (2025~2027)

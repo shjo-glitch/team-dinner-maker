@@ -63,7 +63,7 @@ document.getElementById('create-form').addEventListener('submit', async (e) => {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '약속을 만들지 못했습니다.');
-    location.href = `/event.html?id=${data.id}`;
+    location.href = `/m/${data.id}`;
   } catch (err) {
     errorEl.textContent = err.message;
   }
