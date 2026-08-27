@@ -17,6 +17,7 @@ let eventData = null;
 let voteCal = null;
 let resultCal = null;
 let activeParticipantName = null;
+let cancelButtonTimer = null;
 
 function $(id) {
   return document.getElementById(id);
@@ -283,24 +284,93 @@ async function deleteParticipant(name) {
   }
 }
 
-async function cancelEvent() {
-  const confirmed = confirm(`'${eventData.title}' 약속과 참여자 일정이 모두 삭제됩니다.\n이 작업은 되돌릴 수 없습니다.\n\n정말 파기할까요?`);
-  if (!confirmed) return;
+function formatLockRemaining(lockedUntil) {
+  const remainingSeconds = Math.max(0, Math.ceil((new Date(lockedUntil).getTime() - Date.now()) / 1000));
+  return `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`;
+}
 
+function syncCancelEventState() {
+  clearTimeout(cancelButtonTimer);
   const button = $('cancel-event');
-  const originalLabel = button.textContent;
-  button.disabled = true;
-  button.textContent = '파기하는 중…';
+  const confirmButton = $('cancel-confirm');
+  const pinInput = $('cancel-pin');
+  const lockedUntil = eventData.deleteLockedUntil;
+  const isLocked = lockedUntil && new Date(lockedUntil).getTime() > Date.now();
+
+  if (isLocked) {
+    const remaining = formatLockRemaining(lockedUntil);
+    button.disabled = true;
+    button.textContent = `${remaining} 후 재시도`;
+    button.title = '관리 비밀번호를 5회 틀려 3분 동안 약속 파기가 잠겼어요.';
+    confirmButton.disabled = true;
+    pinInput.disabled = true;
+    cancelButtonTimer = setTimeout(syncCancelEventState, 1000);
+    return;
+  }
+
+  button.disabled = false;
+  button.textContent = '약속 파기하기';
+  button.removeAttribute('title');
+  confirmButton.disabled = false;
+  pinInput.disabled = false;
+}
+
+function openCancelDialog() {
+  const dialog = $('cancel-dialog');
+  $('cancel-pin').value = '';
+  $('cancel-error').textContent = '';
+  dialog.showModal();
+  $('cancel-pin').focus();
+}
+
+function returnHome() {
+  location.assign('/');
+}
+
+function showCancelSuccess() {
+  $('cancel-dialog').close();
+  $('cancel-success-dialog').showModal();
+  $('cancel-success-home').focus();
+}
+
+async function cancelEvent(e) {
+  e.preventDefault();
+  const pin = $('cancel-pin').value;
+  const errorEl = $('cancel-error');
+  errorEl.textContent = '';
+  if (!/^\d{4,6}$/.test(pin)) {
+    errorEl.textContent = '관리 비밀번호는 숫자 4~6자리로 입력해 주세요.';
+    $('cancel-pin').focus();
+    return;
+  }
+
+  const confirmButton = $('cancel-confirm');
+  const originalLabel = confirmButton.textContent;
+  confirmButton.disabled = true;
+  confirmButton.textContent = '파기하는 중…';
 
   try {
-    const res = await fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+    const res = await fetch(`/api/events/${eventId}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ managePin: pin }),
+    });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok && res.status !== 404) throw new Error(data.error || '약속을 파기하지 못했습니다.');
-    location.assign('/');
+    if (res.ok || res.status === 404) {
+      showCancelSuccess();
+      return;
+    }
+    if (data.deleteLockedUntil) {
+      eventData.deleteLockedUntil = data.deleteLockedUntil;
+      syncCancelEventState();
+      $('cancel-dialog').close();
+      return;
+    }
+    throw new Error(data.error || '약속을 파기하지 못했습니다.');
   } catch (err) {
-    alert(err.message || '약속을 파기하지 못했습니다. 다시 시도해 주세요.');
-    button.disabled = false;
-    button.textContent = originalLabel;
+    errorEl.textContent = err.message || '약속을 파기하지 못했습니다. 다시 시도해 주세요.';
+    confirmButton.disabled = false;
+    confirmButton.textContent = originalLabel;
   }
 }
 
@@ -341,6 +411,7 @@ async function init() {
   renderHead();
   renderVotePeople();
   syncNameInputState();
+  syncCancelEventState();
 
   $('tab-vote').addEventListener('click', () => switchTab('vote'));
   $('tab-result').addEventListener('click', () => switchTab('result'));
@@ -386,7 +457,14 @@ async function init() {
     }
     setTimeout(() => ($('copy-link').textContent = '🔗 참여 링크 복사'), 1500);
   });
-  $('cancel-event').addEventListener('click', cancelEvent);
+  $('cancel-event').addEventListener('click', openCancelDialog);
+  $('cancel-dialog-form').addEventListener('submit', cancelEvent);
+  $('cancel-dialog-close').addEventListener('click', () => $('cancel-dialog').close());
+  $('cancel-success-home').addEventListener('click', returnHome);
+  $('cancel-success-dialog').addEventListener('cancel', (e) => {
+    e.preventDefault();
+    returnHome();
+  });
 
   // 참여자 칩: 클릭 → 일정 수정 활성화, ✕ → 삭제
   $('vote-people').addEventListener('click', (e) => {

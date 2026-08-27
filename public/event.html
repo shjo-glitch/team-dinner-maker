@@ -115,6 +115,33 @@
       <p class="empty-note">링크가 정확한지 확인해 주세요.</p>
       <p style="margin-top: 14px;"><a class="btn small" href="/">새 약속 만들기</a></p>
     </div>
+
+    <dialog class="cancel-dialog" id="cancel-dialog" aria-labelledby="cancel-dialog-title">
+      <form class="cancel-dialog-form" id="cancel-dialog-form" novalidate>
+        <p class="section-kicker">IRREVERSIBLE ACTION</p>
+        <h2 id="cancel-dialog-title">약속을 파기할까요?</h2>
+        <p class="cancel-dialog-copy">참여자 일정과 결과가 모두 삭제되며, 이 작업은 되돌릴 수 없어요.</p>
+        <div class="field">
+          <label for="cancel-pin">관리 비밀번호</label>
+          <input type="password" id="cancel-pin" inputmode="numeric" autocomplete="current-password" pattern="[0-9]{4,6}" maxlength="6" placeholder="숫자 4~6자리" required />
+        </div>
+        <p class="error-msg" id="cancel-error" aria-live="polite"></p>
+        <div class="cancel-dialog-actions">
+          <button type="button" class="btn ghost small" id="cancel-dialog-close">취소</button>
+          <button type="submit" class="btn danger-solid small" id="cancel-confirm">약속 파기하기</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="success-dialog" id="cancel-success-dialog" aria-labelledby="cancel-success-title">
+      <div class="success-dialog-content">
+        <span class="success-dialog-mark" aria-hidden="true">✓</span>
+        <p class="section-kicker">DONE</p>
+        <h2 id="cancel-success-title">약속이 파기되었습니다.</h2>
+        <p>참여자 일정과 결과를 모두 삭제했어요.</p>
+        <button type="button" class="btn small" id="cancel-success-home">첫 화면으로 돌아가기</button>
+      </div>
+    </dialog>
   </div>
 
   <script src="/js/holidays.js"></script>

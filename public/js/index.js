@@ -6,6 +6,28 @@ function fmtDate(d) {
 
 // '특정 날짜까지' 선택 시에만 날짜 입력칸 표시
 const rangeEndInput = document.getElementById('range-end');
+const managePinInput = document.getElementById('manage-pin');
+const managePinHint = document.getElementById('manage-pin-hint');
+const MANAGE_PIN_HINT = '약속을 파기할 때 필요한 비밀번호예요. 잊으면 복구할 수 없어요.';
+
+function updateManagePinHint() {
+  const pin = managePinInput.value;
+  managePinHint.classList.remove('validation-invalid', 'validation-valid');
+  if (!pin) {
+    managePinHint.textContent = MANAGE_PIN_HINT;
+    return;
+  }
+  if (!/^\d{4,6}$/.test(pin)) {
+    managePinHint.textContent = '비밀번호는 4~6자 숫자로 입력해주세요.';
+    managePinHint.classList.add('validation-invalid');
+    return;
+  }
+  managePinHint.textContent = 'OK';
+  managePinHint.classList.add('validation-valid');
+}
+
+managePinInput.addEventListener('input', updateManagePinHint);
+
 document.querySelectorAll('input[name="range"]').forEach((radio) => {
   radio.addEventListener('change', () => {
     const custom = radio.value === 'custom' && radio.checked;
@@ -50,10 +72,17 @@ document.getElementById('create-form').addEventListener('submit', async (e) => {
   const payload = {
     title: document.getElementById('title').value.trim(),
     totalCount: Number(document.getElementById('total').value),
+    managePin: managePinInput.value,
     theme: document.querySelector('input[name="theme"]:checked').value,
     startDate: range.startDate,
     endDate: range.endDate,
   };
+
+  if (!/^\d{4,6}$/.test(payload.managePin)) {
+    errorEl.textContent = '관리 비밀번호는 숫자 4~6자리로 입력해 주세요.';
+    document.getElementById('manage-pin').focus();
+    return;
+  }
 
   try {
     const res = await fetch('/api/events', {

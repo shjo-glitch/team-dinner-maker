@@ -1,0 +1,13 @@
+name = "team-dinner-maker-expiry"
+main = "workers/expiry-scheduler.js"
+compatibility_date = "2026-01-01"
+workers_dev = false
+
+# Cloudflare Cron Trigger는 UTC 기준: 15:00 UTC = 한국 시간 00:00
+[triggers]
+crons = ["0 15 * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "team-dinner-maker-db"
+database_id = "197b4252-867d-42ed-96a0-215091959117"

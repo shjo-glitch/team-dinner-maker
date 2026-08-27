@@ -68,6 +68,9 @@ function readBody(req) {
 // ---- 공용 검증 로직 (functions/ 쪽과 동일한 규칙) ----
 const THEMES = ['weekday', 'weekend', 'both'];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MANAGE_PIN_RE = /^\d{4,6}$/;
+const MAX_DELETE_ATTEMPTS = 5;
+const DELETE_LOCK_MS = 3 * 60 * 1000;
 
 function validateEventInput(body) {
   const title = String(body.title || '').trim();
@@ -75,11 +78,13 @@ function validateEventInput(body) {
   const theme = String(body.theme || '');
   const startDate = String(body.startDate || '');
   const endDate = String(body.endDate || '');
+  const managePin = body.managePin == null ? '' : String(body.managePin);
   if (!title || title.length > 60) return '약속 이름은 1~60자로 입력해 주세요.';
   if (!Number.isInteger(totalCount) || totalCount < 2 || totalCount > 100) return '총 인원은 2~100 사이의 숫자여야 합니다.';
   if (!THEMES.includes(theme)) return '테마 값이 올바르지 않습니다.';
   if (!DATE_RE.test(startDate) || !DATE_RE.test(endDate) || endDate < startDate) return '표시 범위가 올바르지 않습니다.';
   if ((new Date(endDate) - new Date(startDate)) / 86400000 > 370) return '표시 범위는 최대 1년까지 지정할 수 있습니다.';
+  if (!MANAGE_PIN_RE.test(managePin)) return '관리 비밀번호는 숫자 4~6자리로 입력해 주세요.';
   return null;
 }
 
@@ -93,6 +98,37 @@ function validateParticipantInput(body) {
   return null;
 }
 
+function hashManagePin(pin, salt) {
+  return crypto.createHash('sha256').update(`${salt}:${pin}`).digest('hex');
+}
+
+function publicEvent(event) {
+  const { managePinHash, managePinSalt, deleteAuthFailures, ...publicData } = event;
+  return publicData;
+}
+
+function nextDate(dateStr) {
+  const date = new Date(`${dateStr}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+// 공동 1위가 여러 날이면 가장 늦은 후보 다음 날에 만료해 모든 1위 후보를 보존한다.
+function refreshExpireDate(event) {
+  const counts = {};
+  for (const participant of event.participants) {
+    for (const date of participant.dates) counts[date] = (counts[date] || 0) + 1;
+  }
+  const rankedDates = Object.keys(counts);
+  if (rankedDates.length === 0) {
+    event.expireDate = null;
+    return;
+  }
+  const maxCount = Math.max(...Object.values(counts));
+  const latestTopDate = rankedDates.filter((date) => counts[date] === maxCount).sort().at(-1);
+  event.expireDate = nextDate(latestTopDate);
+}
+
 async function handleApi(req, res, url) {
   const parts = url.pathname.split('/').filter(Boolean); // ['api','events',id?,'participants'?]
 
@@ -102,6 +138,7 @@ async function handleApi(req, res, url) {
     const err = validateEventInput(body);
     if (err) return sendJson(res, 400, { error: err });
     const id = crypto.randomBytes(8).toString('hex').slice(0, 10);
+    const managePinSalt = crypto.randomBytes(16).toString('hex');
     const event = {
       id,
       title: String(body.title).trim(),
@@ -109,6 +146,11 @@ async function handleApi(req, res, url) {
       theme: String(body.theme),
       startDate: String(body.startDate),
       endDate: String(body.endDate),
+      managePinSalt,
+      managePinHash: hashManagePin(String(body.managePin), managePinSalt),
+      deleteAuthFailures: 0,
+      deleteLockedUntil: null,
+      expireDate: null,
       createdAt: new Date().toISOString(),
       participants: [],
     };
@@ -120,13 +162,40 @@ async function handleApi(req, res, url) {
   if (req.method === 'GET' && parts.length === 3 && parts[1] === 'events') {
     const event = loadEvent(parts[2]);
     if (!event) return sendJson(res, 404, { error: '약속을 찾을 수 없습니다.' });
-    return sendJson(res, 200, event);
+    return sendJson(res, 200, publicEvent(event));
   }
 
   // DELETE /api/events/:id
   if (req.method === 'DELETE' && parts.length === 3 && parts[1] === 'events') {
     const event = loadEvent(parts[2]);
     if (!event) return sendJson(res, 404, { error: '약속을 찾을 수 없습니다.' });
+    const body = await readBody(req);
+    const managePin = body.managePin == null ? '' : String(body.managePin);
+    const now = Date.now();
+    if (event.deleteLockedUntil && new Date(event.deleteLockedUntil).getTime() > now) {
+      return sendJson(res, 429, { error: '관리 비밀번호를 5회 틀려 3분 동안 약속 파기가 잠겼어요.', deleteLockedUntil: event.deleteLockedUntil });
+    }
+    if (!event.managePinHash || !event.managePinSalt) {
+      return sendJson(res, 409, { error: '관리 비밀번호가 설정되지 않은 이전 약속은 파기할 수 없어요.' });
+    }
+    const pinHash = hashManagePin(managePin, event.managePinSalt);
+    const isValidPin =
+      MANAGE_PIN_RE.test(managePin) &&
+      pinHash.length === event.managePinHash.length &&
+      crypto.timingSafeEqual(Buffer.from(pinHash), Buffer.from(event.managePinHash));
+    if (!isValidPin) {
+      const attempts = (event.deleteAuthFailures || 0) + 1;
+      if (attempts >= MAX_DELETE_ATTEMPTS) {
+        event.deleteAuthFailures = 0;
+        event.deleteLockedUntil = new Date(now + DELETE_LOCK_MS).toISOString();
+        saveEvent(event);
+        return sendJson(res, 429, { error: '관리 비밀번호를 5회 틀려 3분 동안 약속 파기가 잠겼어요.', deleteLockedUntil: event.deleteLockedUntil });
+      }
+      event.deleteAuthFailures = attempts;
+      event.deleteLockedUntil = null;
+      saveEvent(event);
+      return sendJson(res, 401, { error: `관리 비밀번호가 올바르지 않습니다. (${MAX_DELETE_ATTEMPTS - attempts}회 남음)` });
+    }
     fs.unlinkSync(eventPath(event.id));
     return sendJson(res, 200, { ok: true });
   }
@@ -149,8 +218,9 @@ async function handleApi(req, res, url) {
       }
       event.participants.push(entry);
     }
+    refreshExpireDate(event);
     saveEvent(event);
-    return sendJson(res, 200, event);
+    return sendJson(res, 200, publicEvent(event));
   }
 
   // DELETE /api/events/:id/participants?name=...
@@ -159,8 +229,9 @@ async function handleApi(req, res, url) {
     if (!event) return sendJson(res, 404, { error: '약속을 찾을 수 없습니다.' });
     const name = String(url.searchParams.get('name') || '').trim();
     event.participants = event.participants.filter((p) => p.name !== name);
+    refreshExpireDate(event);
     saveEvent(event);
-    return sendJson(res, 200, event);
+    return sendJson(res, 200, publicEvent(event));
   }
 
   return sendJson(res, 404, { error: 'not found' });

@@ -11,6 +11,33 @@ async function saveEvent(env, event) {
   await env.DB.prepare('UPDATE events SET data = ?2 WHERE id = ?1').bind(event.id, JSON.stringify(event)).run();
 }
 
+function publicEvent(event) {
+  const { managePinHash, managePinSalt, deleteAuthFailures, ...publicData } = event;
+  return publicData;
+}
+
+function nextDate(dateStr) {
+  const date = new Date(`${dateStr}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+// 공동 1위가 여러 날이면 가장 늦은 후보 다음 날에 만료해 모든 1위 후보를 보존한다.
+function refreshExpireDate(event) {
+  const counts = {};
+  for (const participant of event.participants) {
+    for (const date of participant.dates) counts[date] = (counts[date] || 0) + 1;
+  }
+  const rankedDates = Object.keys(counts);
+  if (rankedDates.length === 0) {
+    event.expireDate = null;
+    return;
+  }
+  const maxCount = Math.max(...Object.values(counts));
+  const latestTopDate = rankedDates.filter((date) => counts[date] === maxCount).sort().at(-1);
+  event.expireDate = nextDate(latestTopDate);
+}
+
 export async function onRequestPut({ request, params, env }) {
   const event = await loadEvent(env, params.id);
   if (!event) {
@@ -43,8 +70,9 @@ export async function onRequestPut({ request, params, env }) {
     event.participants.push(entry);
   }
 
+  refreshExpireDate(event);
   await saveEvent(env, event);
-  return Response.json(event);
+  return Response.json(publicEvent(event));
 }
 
 export async function onRequestDelete({ request, params, env }) {
@@ -54,6 +82,7 @@ export async function onRequestDelete({ request, params, env }) {
   }
   const name = String(new URL(request.url).searchParams.get('name') || '').trim();
   event.participants = event.participants.filter((p) => p.name !== name);
+  refreshExpireDate(event);
   await saveEvent(env, event);
-  return Response.json(event);
+  return Response.json(publicEvent(event));
 }
