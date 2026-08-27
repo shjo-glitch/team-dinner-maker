@@ -8,6 +8,7 @@
     "dev": "node server.js",
     "pages:dev": "npx wrangler pages dev public",
     "pages:deploy": "npx wrangler pages deploy public --project-name=team-dinner-maker",
+    "capture": "node scripts/capture-screenshots.mjs",
     "expiry:dev": "npx wrangler dev --config wrangler.expiry.toml",
     "expiry:deploy": "npx wrangler deploy --config wrangler.expiry.toml"
   },
