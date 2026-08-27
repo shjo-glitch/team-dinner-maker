@@ -123,6 +123,14 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, event);
   }
 
+  // DELETE /api/events/:id
+  if (req.method === 'DELETE' && parts.length === 3 && parts[1] === 'events') {
+    const event = loadEvent(parts[2]);
+    if (!event) return sendJson(res, 404, { error: '약속을 찾을 수 없습니다.' });
+    fs.unlinkSync(eventPath(event.id));
+    return sendJson(res, 200, { ok: true });
+  }
+
   // PUT /api/events/:id/participants  (이름 기준 upsert)
   if (req.method === 'PUT' && parts.length === 4 && parts[1] === 'events' && parts[3] === 'participants') {
     const event = loadEvent(parts[2]);

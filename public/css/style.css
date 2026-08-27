@@ -76,6 +76,7 @@ input:focus-visible { border-color: var(--accent); background: #fffefa; box-shad
 .btn.block { width: 100%; justify-content: space-between; min-height: 54px; padding-inline: 21px; }
 .btn.ghost { color: var(--accent); border-color: var(--accent); background: transparent; box-shadow: none; }
 .btn.ghost:hover { background: var(--accent-soft); box-shadow: none; transform: none; }
+.btn.ghost.danger { color: #842c22; border-color: #9f4638; }.btn.ghost.danger:hover { color: #6f2119; border-color: #842c22; background: #f8ddd6; }
 .btn.small { min-height: 38px; padding: 8px 12px; font-size: 12px; }
 
 /* compact radio cards */
