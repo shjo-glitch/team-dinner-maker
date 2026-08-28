@@ -23,6 +23,9 @@ const PORT = Number(process.env.PORT || 8899);
 
 // 캡처 기준 시나리오: 총원 5명 / 표시 범위 오늘~2026-09-30 / 평일 약속.
 // 9월 22~25일이 전원(5명) 겹치는 1위가 되도록 날짜를 배치한다.
+const TITLE = '9월 팀 회식';
+const TOTAL_COUNT = 5;                 // SEEDED 인원 + LAST_PERSON 과 맞춘다
+const THEME = 'weekday';               // weekday | weekend | both
 const RANGE_END = '2026-09-30';
 const TOP_DATES = ['2026-09-22', '2026-09-23', '2026-09-24', '2026-09-25'];
 const MANAGE_PIN = '1234';
@@ -127,8 +130,8 @@ async function main() {
   try {
     // ---------- 01. 약속 만들기 (관리 비밀번호 포함) ----------
     await page.goto(`${base}/`, { waitUntil: 'networkidle0' });
-    await page.type('#title', '9월 팀 회식');
-    await page.type('#total', '5');
+    await page.type('#title', TITLE);
+    await page.type('#total', String(TOTAL_COUNT));
     await page.type('#manage-pin', MANAGE_PIN);
     await page.click('label[for="range-custom"]');
     await page.waitForFunction(() => !document.getElementById('range-end').hidden);
@@ -137,7 +140,7 @@ async function main() {
       el.value = value;
       el.dispatchEvent(new Event('change', { bubbles: true }));
     }, RANGE_END);
-    await page.click('label[for="theme-weekday"]');
+    await page.click(`label[for="theme-${THEME}"]`);
     await page.evaluate(() => window.scrollTo(0, 0));
     await sleep(500);
     await shot('01-create-event.png', { fullPage: true });
