@@ -1,42 +1,6 @@
 // PUT    /api/events/:id/participants        - 참여자 일정 등록/수정 (이름 기준 upsert)
 // DELETE /api/events/:id/participants?name=x - 참여자 삭제
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-async function loadEvent(env, id) {
-  const row = await env.DB.prepare('SELECT data FROM events WHERE id = ?1').bind(id).first();
-  return row ? JSON.parse(row.data) : null;
-}
-
-async function saveEvent(env, event) {
-  await env.DB.prepare('UPDATE events SET data = ?2 WHERE id = ?1').bind(event.id, JSON.stringify(event)).run();
-}
-
-function publicEvent(event) {
-  const { managePinHash, managePinSalt, deleteAuthFailures, ...publicData } = event;
-  return publicData;
-}
-
-function nextDate(dateStr) {
-  const date = new Date(`${dateStr}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + 1);
-  return date.toISOString().slice(0, 10);
-}
-
-// 공동 1위가 여러 날이면 가장 늦은 후보 다음 날에 만료해 모든 1위 후보를 보존한다.
-function refreshExpireDate(event) {
-  const counts = {};
-  for (const participant of event.participants) {
-    for (const date of participant.dates) counts[date] = (counts[date] || 0) + 1;
-  }
-  const rankedDates = Object.keys(counts);
-  if (rankedDates.length === 0) {
-    event.expireDate = null;
-    return;
-  }
-  const maxCount = Math.max(...Object.values(counts));
-  const latestTopDate = rankedDates.filter((date) => counts[date] === maxCount).sort().at(-1);
-  event.expireDate = nextDate(latestTopDate);
-}
+import { DATE_RE, loadEvent, publicEvent, readJson, refreshExpireDate, saveEvent } from '../../_shared.js';
 
 export async function onRequestPut({ request, params, env }) {
   const event = await loadEvent(env, params.id);
@@ -44,12 +8,8 @@ export async function onRequestPut({ request, params, env }) {
     return Response.json({ error: '약속을 찾을 수 없습니다.' }, { status: 404 });
   }
 
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: '요청 형식이 올바르지 않습니다.' }, { status: 400 });
-  }
+  const { body, error } = await readJson(request);
+  if (error) return error;
 
   const name = String(body.name || '').trim();
   const dates = body.dates;
@@ -82,6 +42,10 @@ export async function onRequestDelete({ request, params, env }) {
   }
   const name = String(new URL(request.url).searchParams.get('name') || '').trim();
   event.participants = event.participants.filter((p) => p.name !== name);
+  // 삭제된 참여자가 넣어둔 장소 투표도 함께 정리한다.
+  for (const place of event.places || []) {
+    if (Array.isArray(place.votes)) place.votes = place.votes.filter((voter) => voter !== name);
+  }
   refreshExpireDate(event);
   await saveEvent(env, event);
   return Response.json(publicEvent(event));

@@ -1,26 +1,9 @@
 // POST /api/events - 새 약속 생성 (Cloudflare Pages Functions + D1)
-const THEMES = ['weekday', 'weekend', 'both'];
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const MANAGE_PIN_RE = /^\d{4,6}$/;
-
-function createManagePinSalt() {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-async function hashManagePin(pin, salt) {
-  const encoded = new TextEncoder().encode(`${salt}:${pin}`);
-  const digest = await crypto.subtle.digest('SHA-256', encoded);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
+import { DATE_RE, MANAGE_PIN_RE, THEMES, createManagePinSalt, hashManagePin, readJson } from '../_shared.js';
 
 export async function onRequestPost({ request, env }) {
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: '요청 형식이 올바르지 않습니다.' }, { status: 400 });
-  }
+  const { body, error } = await readJson(request);
+  if (error) return error;
 
   const title = String(body.title || '').trim();
   const totalCount = Number(body.totalCount);
@@ -63,8 +46,11 @@ export async function onRequestPost({ request, env }) {
     deleteAuthFailures: 0,
     deleteLockedUntil: null,
     expireDate: null,
+    confirmedAt: null,
+    confirmedTime: null,
     createdAt: new Date().toISOString(),
     participants: [],
+    places: [],
   };
   await env.DB.prepare('INSERT INTO events (id, data) VALUES (?1, ?2)').bind(id, JSON.stringify(event)).run();
   return Response.json({ id });

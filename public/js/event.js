@@ -12,12 +12,86 @@ const THEME_LABELS = {
   weekend: '주말 약속 (평일 선택 불가)',
   both: '평일+주말 약속',
 };
+// 팀즈 카드에는 짧은 라벨을 쓴다. (서버의 buildTeamsCard 와 같은 값)
+const THEME_CARD_LABELS = { weekday: '평일 약속', weekend: '주말 약속', both: '평일+주말 약속' };
+const DOW_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+const CONFIRM_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const DEFAULT_MEET_TIME = '19:00';
+
+// '19:00' -> '오후 7:00' (서버 formatMeetTime 과 같은 규칙)
+function formatMeetTime(time) {
+  if (!CONFIRM_TIME_RE.test(String(time || ''))) return '';
+  const [hour, minute] = time.split(':').map(Number);
+  return `${hour < 12 ? '오전' : '오후'} ${hour % 12 === 0 ? 12 : hour % 12}:${String(minute).padStart(2, '0')}`;
+}
+
+// 확정된 약속의 만나는 시간. 확정 전이면 빈 문자열.
+function meetTimeLabel() {
+  return isScheduleConfirmed() ? formatMeetTime(eventData.confirmedTime) : '';
+}
+
+// 진행 단계: 1 일정 만들기 → 2 일정 투표 → 3 일정·장소 정하기 → 4 공유하기
+function isScheduleConfirmed() {
+  return Boolean(eventData.confirmedAt && eventData.confirmedDate && eventData.confirmedTime);
+}
+
+function confirmedPlace() {
+  return (eventData.places || []).find((place) => place.id === eventData.confirmedPlaceId) || null;
+}
+
+function isFullyConfirmed() {
+  return isScheduleConfirmed() && Boolean(confirmedPlace());
+}
+
+// 1단계(만들기)는 이 페이지에 들어온 시점에 이미 끝나 있다.
+function currentStep() {
+  if (isFullyConfirmed()) return 4;
+  if (isScheduleConfirmed()) return 3;
+  return 2;
+}
+
+function renderSteps() {
+  const step = currentStep();
+  for (const item of $('steps').children) {
+    const order = Number(item.dataset.step);
+    item.classList.toggle('done', order < step);
+    item.classList.toggle('current', order === step);
+  }
+}
 
 let eventData = null;
 let voteCal = null;
 let resultCal = null;
 let activeParticipantName = null;
 let cancelButtonTimer = null;
+
+// 장소 정하기(확정 후) 상태
+let appConfig = { naverMapKeyId: '', placeSearchEnabled: false };
+let placeMap = null;
+let placeMapReady = false;
+let activeVoterName = null;
+let searchResults = [];
+let selectedResultIndex = null;
+
+// 투표자 이름은 브라우저마다 다르므로 약속별로 기억해 둔다.
+const VOTER_STORAGE_KEY = `dinner-voter:${eventId}`;
+
+function readStoredVoter() {
+  try {
+    return localStorage.getItem(VOTER_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function storeVoter(name) {
+  try {
+    if (name) localStorage.setItem(VOTER_STORAGE_KEY, name);
+    else localStorage.removeItem(VOTER_STORAGE_KEY);
+  } catch {
+    // 시크릿 모드 등 저장이 막힌 환경에서는 기억하지 않고 넘어간다.
+  }
+}
 
 function $(id) {
   return document.getElementById(id);
@@ -31,6 +105,16 @@ async function loadEvent() {
   const res = await fetch(`/api/events/${eventId}`);
   if (!res.ok) return null;
   return res.json();
+}
+
+async function loadConfig() {
+  try {
+    const res = await fetch('/api/config');
+    if (res.ok) return res.json();
+  } catch {
+    // 설정을 못 읽으면 지도 없이 후보지 목록만 동작한다.
+  }
+  return { naverMapKeyId: '', placeSearchEnabled: false };
 }
 
 function buildCounts() {
@@ -98,6 +182,9 @@ function renderHead() {
   $('event-theme').textContent = THEME_LABELS[eventData.theme] || eventData.theme;
   $('event-range').textContent = `${fmtRangeLabel(range.startDate)} ~ ${fmtRangeLabel(range.endDate)}`;
   $('event-progress').textContent = `참여 ${eventData.participants.length}명 / 총원 ${eventData.totalCount}명`;
+  const meetTime = meetTimeLabel();
+  $('event-time').hidden = !meetTime;
+  $('event-time').textContent = meetTime ? `🕖 ${meetTime} 만남` : '';
 }
 
 function isAtCapacity() {
@@ -167,7 +254,7 @@ function renderResult() {
 
 function showDateDetail(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
-  const dow = ['일', '월', '화', '수', '목', '금', '토'][new Date(y, m - 1, d).getDay()];
+  const dow = DOW_LABELS[new Date(y, m - 1, d).getDay()];
   const ok = eventData.participants.filter((p) => p.dates.includes(dateStr));
   const no = eventData.participants.filter((p) => !p.dates.includes(dateStr));
   const holiday = KR_HOLIDAYS[dateStr];
@@ -194,9 +281,12 @@ function updateSelectedCount(n) {
 function switchTab(tab) {
   $('tab-vote').classList.toggle('active', tab === 'vote');
   $('tab-result').classList.toggle('active', tab === 'result');
+  $('tab-place').classList.toggle('active', tab === 'place');
   $('panel-vote').hidden = tab !== 'vote';
   $('panel-result').hidden = tab !== 'result';
+  $('panel-place').hidden = tab !== 'place';
   if (tab === 'result') renderResult();
+  if (tab === 'place') renderPlacePanel();
 }
 
 async function saveMySchedule() {
@@ -226,6 +316,11 @@ async function saveMySchedule() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '저장하지 못했습니다.');
     eventData = data;
+    // 방금 등록한 사람을 장소 투표자로도 기억해 둔다.
+    if (!activeVoterName) {
+      activeVoterName = name;
+      storeVoter(name);
+    }
     renderHead();
     renderVotePeople();
     if (dates.length > 0) {
@@ -289,30 +384,41 @@ function formatLockRemaining(lockedUntil) {
   return `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`;
 }
 
-function syncCancelEventState() {
+// 파기·확정이 같은 관리 비밀번호 잠금을 공유하므로 두 버튼을 함께 잠근다.
+function syncManageLockState() {
   clearTimeout(cancelButtonTimer);
-  const button = $('cancel-event');
-  const confirmButton = $('cancel-confirm');
-  const pinInput = $('cancel-pin');
+  const cancelButton = $('cancel-event');
+  const confirmEventButton = $('confirm-event');
   const lockedUntil = eventData.deleteLockedUntil;
   const isLocked = lockedUntil && new Date(lockedUntil).getTime() > Date.now();
+  const confirmed = Boolean(eventData.confirmedAt);
 
-  if (isLocked) {
-    const remaining = formatLockRemaining(lockedUntil);
-    button.disabled = true;
-    button.textContent = `${remaining} 후 재시도`;
-    button.title = '관리 비밀번호를 5회 틀려 3분 동안 약속 파기가 잠겼어요.';
-    confirmButton.disabled = true;
-    pinInput.disabled = true;
-    cancelButtonTimer = setTimeout(syncCancelEventState, 1000);
-    return;
+  for (const [button, label] of [
+    [cancelButton, '약속 파기하기'],
+    [confirmEventButton, confirmed ? '↩︎ 확정 취소하기' : '📍 일정 확정하기'],
+  ]) {
+    if (isLocked) {
+      button.disabled = true;
+      button.textContent = `${formatLockRemaining(lockedUntil)} 후 재시도`;
+      button.title = '관리 비밀번호를 5회 틀려 3분 동안 관리 기능이 잠겼어요.';
+    } else {
+      button.disabled = false;
+      button.textContent = label;
+      button.removeAttribute('title');
+    }
   }
 
-  button.disabled = false;
-  button.textContent = '약속 파기하기';
-  button.removeAttribute('title');
-  confirmButton.disabled = false;
-  pinInput.disabled = false;
+  for (const id of ['cancel-confirm', 'cancel-pin', 'confirm-submit', 'confirm-pin']) $(id).disabled = isLocked;
+  if (isLocked) cancelButtonTimer = setTimeout(syncManageLockState, 1000);
+}
+
+// 확정 여부에 따라 '어디서 볼까?' 탭을 열고 닫는다.
+function syncConfirmState() {
+  const confirmed = isScheduleConfirmed();
+  $('tab-place').hidden = !confirmed;
+  renderHead();
+  renderSteps();
+  if (!confirmed && !$('panel-place').hidden) switchTab('vote');
 }
 
 function openCancelDialog() {
@@ -362,7 +468,7 @@ async function cancelEvent(e) {
     }
     if (data.deleteLockedUntil) {
       eventData.deleteLockedUntil = data.deleteLockedUntil;
-      syncCancelEventState();
+      syncManageLockState();
       $('cancel-dialog').close();
       return;
     }
@@ -374,13 +480,676 @@ async function cancelEvent(e) {
   }
 }
 
+// ---- 어디서 볼까? (후보지 등록 / 투표) ----
+
+// 주소에서 시/도 + 시군구 까지만 남긴다. ('경기도 성남시 분당구' 처럼 시 아래 구가 있으면 세 토막)
+function addressRegion(address) {
+  const tokens = String(address || '').trim().split(/\s+/).filter(Boolean);
+  if (tokens.length < 2) return '';
+  const hasDistrictUnderCity = /시$/.test(tokens[1]) && tokens[2] && /(구|군)$/.test(tokens[2]);
+  return tokens.slice(0, hasDistrictUnderCity ? 3 : 2).join(' ');
+}
+
+// 붙여넣은 POI 링크가 있으면 그대로 쓴다. 없으면 검색 URL로 폴백하는데,
+// 전체 도로명주소(층·호 포함)를 넣으면 네이버 지도 검색이 실패하므로 이름 + 시군구까지만 쓴다.
+function placeMapLink(place) {
+  if (place.link) return place.link;
+  const query = [place.name, addressRegion(place.address || place.roadAddress)].filter(Boolean).join(' ');
+  return `https://map.naver.com/p/search/${encodeURIComponent(query)}`;
+}
+
+// 득표 많은 순, 같으면 먼저 등록된 순. 목록 순서가 곧 지도 핀 번호가 된다.
+function sortedPlaces() {
+  return [...(eventData.places || [])].sort(
+    (a, b) => (b.votes || []).length - (a.votes || []).length || String(a.addedAt).localeCompare(String(b.addedAt))
+  );
+}
+
+// 참여자에서 빠진 사람이 투표자로 남아 있지 않도록 정리한다.
+function syncVoterName() {
+  if (activeVoterName && !eventData.participants.some((p) => p.name === activeVoterName)) {
+    activeVoterName = null;
+    storeVoter(null);
+  }
+}
+
+function selectVoter(name) {
+  activeVoterName = activeVoterName === name ? null : name;
+  storeVoter(activeVoterName);
+  $('place-error').textContent = '';
+  renderVoterChips();
+  renderPlaceList();
+}
+
+function renderVoterChips() {
+  const wrap = $('place-voters');
+  const hint = $('place-voter-hint');
+  if (eventData.participants.length === 0) {
+    wrap.innerHTML = '<span class="empty-note">아직 참여자가 없어요. 먼저 일정을 등록해 주세요.</span>';
+    hint.textContent = '참여자가 등록되면 투표할 수 있어요.';
+    return;
+  }
+  wrap.innerHTML = eventData.participants
+    .map((p) => {
+      const active = p.name === activeVoterName;
+      return `<span class="person-chip${active ? ' active' : ''}" data-voter="${esc(p.name)}" role="button" tabindex="0" aria-pressed="${active}">${esc(p.name)}</span>`;
+    })
+    .join('');
+  hint.textContent = activeVoterName
+    ? `${activeVoterName} 님으로 투표하고 있어요. 이름을 다시 누르면 해제돼요.`
+    : '이름을 선택하면 투표할 수 있어요.';
+}
+
+// 득표 1위를 목록 카드와 지도 핀에서 같은 기준으로 강조한다. (아무도 투표 전이면 1위 없음)
+function rankedPlaces() {
+  const places = sortedPlaces();
+  const topVotes = places.length ? Math.max(...places.map((place) => (place.votes || []).length)) : 0;
+  return places.map((place) => ({ ...place, isTop: topVotes > 0 && (place.votes || []).length === topVotes }));
+}
+
+function renderPlaceList() {
+  const places = rankedPlaces();
+  $('place-count').textContent = places.length;
+  const wrap = $('place-list');
+  if (places.length === 0) {
+    wrap.innerHTML = '<span class="empty-note">아직 등록된 후보지가 없어요. 위에서 검색해 첫 후보를 등록해 보세요!</span>';
+    return;
+  }
+  wrap.innerHTML = places
+    .map((place, index) => {
+      const votes = place.votes || [];
+      const voted = Boolean(activeVoterName) && votes.includes(activeVoterName);
+      const isConfirmed = place.id === eventData.confirmedPlaceId;
+      return `
+        <article class="place-card${place.isTop ? ' top-place' : ''}${isConfirmed ? ' confirmed-card' : ''}" id="place-card-${esc(place.id)}">
+          <span class="place-no" aria-hidden="true">${index + 1}</span>
+          <div class="place-body">
+            <h3 class="place-name">${esc(place.name)}</h3>
+            ${place.category ? `<p class="place-category">${esc(place.category)}</p>` : ''}
+            <p class="place-address">${esc(place.roadAddress || place.address || '')}</p>
+            <div class="place-votes">${
+              votes.length
+                ? votes.map((voter) => `<span class="name-tag ok">${esc(voter)}</span>`).join('')
+                : '<span class="empty-note">아직 투표가 없어요.</span>'
+            }</div>
+          </div>
+          <div class="place-actions">
+            <button type="button" class="vote-btn${voted ? ' voted' : ''}" data-vote="${esc(place.id)}" aria-pressed="${voted}">
+              <span aria-hidden="true">${voted ? '♥' : '♡'}</span> ${votes.length}
+            </button>
+            <a class="place-link" href="${esc(placeMapLink(place))}" target="_blank" rel="noopener noreferrer">지도 ↗</a>
+            <button type="button" class="place-del" data-place-del="${esc(place.id)}" title="후보에서 삭제">✕</button>
+          </div>
+          <div class="place-card-footer">
+            <button type="button" class="place-confirm-btn${isConfirmed ? ' confirmed' : ''}" data-place-confirm="${esc(place.id)}">
+              ${isConfirmed ? '✓ 확정된 장소 · 다시 누르면 확정 취소' : '이 곳으로 확정하기'}
+            </button>
+            ${isConfirmed ? `
+            <button type="button" class="share-btn" data-share title="확정된 일정을 팀즈로 공유">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 13v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" />
+                <path d="M14 4h6v6" />
+                <path d="M20 4l-9 9" />
+              </svg>공유
+            </button>` : ''}
+          </div>
+        </article>`;
+    })
+    .join('');
+}
+
+function showMapNote(message) {
+  const note = $('place-map-note');
+  note.textContent = message;
+  note.hidden = false;
+  $('place-map').classList.add('map-off');
+}
+
+async function updatePlaceMap() {
+  if (!placeMap) {
+    placeMap = new PlaceMap($('place-map'), { onSelect: focusPlaceCard, onAuthFailure: showMapNote });
+    try {
+      await placeMap.init(appConfig.naverMapKeyId);
+      placeMapReady = true;
+    } catch (err) {
+      showMapNote(err.message);
+      return;
+    }
+  }
+  if (placeMapReady) placeMap.setPlaces(rankedPlaces());
+}
+
+function focusPlaceCard(placeId) {
+  const card = $(`place-card-${placeId}`);
+  if (!card) return;
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  card.classList.add('focused');
+  setTimeout(() => card.classList.remove('focused'), 1600);
+}
+
+function renderSearchResults() {
+  const wrap = $('place-results');
+  wrap.innerHTML = searchResults
+    .map((item, index) => {
+      const active = selectedResultIndex === index;
+      // <button> 안에는 <a> 를 넣을 수 없어 선택 버튼과 지도 링크를 나란히 둔다.
+      return `
+        <div class="place-result${active ? ' selected' : ''}">
+          <button type="button" class="place-result-pick" data-result="${index}" aria-pressed="${active}">
+            <span class="place-result-mark" aria-hidden="true">${active ? '●' : '○'}</span>
+            <span class="place-result-body">
+              <b>${esc(item.name)}</b>
+              <small>${esc(item.roadAddress || item.address)}</small>
+              ${item.category ? `<small class="place-result-category">${esc(item.category)}</small>` : ''}
+            </span>
+          </button>
+          <a class="place-link" href="${esc(placeMapLink(item))}" target="_blank" rel="noopener noreferrer">지도 ↗</a>
+        </div>`;
+    })
+    .join('');
+  $('place-add-btn').disabled = selectedResultIndex === null;
+}
+
+async function searchPlaces() {
+  const query = $('place-query').value.trim();
+  const errorEl = $('place-error');
+  errorEl.textContent = '';
+  $('place-info').textContent = '';
+  if (!query) {
+    errorEl.textContent = '검색어를 입력해 주세요.';
+    $('place-query').focus();
+    return;
+  }
+
+  const button = $('place-search-btn');
+  button.disabled = true;
+  button.textContent = '검색 중…';
+  try {
+    const res = await fetch(`/api/places/search?query=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '장소를 검색하지 못했어요.');
+    searchResults = data.items || [];
+    selectedResultIndex = searchResults.length === 1 ? 0 : null;
+    renderSearchResults();
+    if (searchResults.length === 0) {
+      errorEl.textContent = '검색 결과가 없어요. 지역명과 상호를 함께 넣어 다시 검색해 보세요.';
+    }
+  } catch (err) {
+    searchResults = [];
+    selectedResultIndex = null;
+    renderSearchResults();
+    errorEl.textContent = err.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = '검색';
+  }
+}
+
+async function addPlace() {
+  if (selectedResultIndex === null) return;
+  const item = searchResults[selectedResultIndex];
+  const errorEl = $('place-error');
+  const infoEl = $('place-info');
+  errorEl.textContent = '';
+  infoEl.textContent = '';
+
+  const button = $('place-add-btn');
+  button.disabled = true;
+  try {
+    const res = await fetch(`/api/events/${eventId}/places`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...item, link: $('place-link').value.trim(), addedBy: activeVoterName || '' }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '후보지를 등록하지 못했어요.');
+    eventData = data;
+    searchResults = [];
+    selectedResultIndex = null;
+    $('place-query').value = '';
+    $('place-link').value = '';
+    renderSearchResults();
+    renderPlacePanel();
+    infoEl.textContent = `'${item.name}' 을(를) 후보로 등록했어요.`;
+  } catch (err) {
+    errorEl.textContent = err.message;
+    button.disabled = false;
+  }
+}
+
+async function votePlace(placeId) {
+  const errorEl = $('place-error');
+  errorEl.textContent = '';
+  if (!activeVoterName) {
+    errorEl.textContent = '먼저 위에서 내 이름을 선택해 주세요.';
+    $('place-voters').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  const res = await fetch(`/api/events/${eventId}/places`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ placeId, name: activeVoterName }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    errorEl.textContent = data.error || '투표하지 못했어요.';
+    return;
+  }
+  eventData = data;
+  renderPlaceList();
+  updatePlaceMap();
+}
+
+async function deletePlace(placeId) {
+  const place = (eventData.places || []).find((candidate) => candidate.id === placeId);
+  if (!place || !confirm(`'${place.name}' 을(를) 후보에서 삭제할까요?`)) return;
+  const res = await fetch(`/api/events/${eventId}/places?placeId=${encodeURIComponent(placeId)}`, { method: 'DELETE' });
+  if (!res.ok) return;
+  eventData = await res.json();
+  // 확정된 장소를 지웠다면 공유 단계도 함께 닫혀야 한다.
+  syncConfirmState();
+  renderPlacePanel();
+}
+
+function renderConfirmedPlace() {
+  const place = confirmedPlace();
+  const banner = $('confirmed-place');
+  banner.hidden = !place;
+  if (!place) return;
+  banner.innerHTML = `
+    <p class="confirmed-place-label">확정된 장소</p>
+    <p class="confirmed-place-name">${esc(place.name)}</p>
+    <p class="confirmed-place-address">${esc(place.roadAddress || place.address || '')}</p>
+    <a class="confirmed-place-link" href="${esc(placeMapLink(place))}" target="_blank" rel="noopener noreferrer">지도에서 보기 ↗</a>
+    ${place.link ? '' : '<p class="confirmed-place-warn">네이버 지도 링크가 없어 <b>검색</b>으로 연결돼요. 장소를 다시 확정하며 링크를 넣으면 팀즈로도 함께 전달됩니다.</p>'}`;
+}
+
+function renderPlacePanel() {
+  renderConfirmedPlace();
+  const meetTime = meetTimeLabel();
+  $('venue-time').hidden = !meetTime;
+  $('venue-time').textContent = meetTime ? `${meetTime}에 만나요` : '';
+  syncVoterName();
+  renderVoterChips();
+  renderPlaceList();
+  renderSearchResults();
+  if (!appConfig.placeSearchEnabled) {
+    $('place-search-hint').textContent = '장소 검색 키가 설정되지 않아 검색을 사용할 수 없어요. 모임 주최자에게 문의해 주세요.';
+    $('place-query').disabled = true;
+    $('place-search-btn').disabled = true;
+  }
+  updatePlaceMap();
+}
+
+// 가장 많이 겹친 날짜의 원본 값. 확정 다이얼로그 기본값으로 쓴다.
+function topDateValue() {
+  const counts = buildCounts();
+  const ranked = Object.entries(counts)
+    .filter(([, count]) => count > 0)
+    .sort(([dateA, countA], [dateB, countB]) => countB - countA || dateA.localeCompare(dateB));
+  return ranked.length ? ranked[0][0] : '';
+}
+
+function openConfirmDialog() {
+  const confirmed = Boolean(eventData.confirmedAt);
+  $('confirm-dialog-title').textContent = confirmed ? '확정을 취소할까요?' : '일정을 확정할까요?';
+  $('confirm-dialog-copy').textContent = confirmed
+    ? "'어디서 볼까?' 탭이 닫혀요. 등록된 후보지와 투표, 만나는 시간은 지워지지 않고 다시 확정하면 그대로 돌아와요."
+    : "만나는 시간을 정하면 '어디서 볼까?' 탭이 열려서 참여자들이 만날 장소를 등록하고 투표할 수 있어요. 날짜는 그대로 계속 수정할 수 있어요.";
+  $('confirm-submit').textContent = confirmed ? '확정 취소하기' : '확정하기';
+  // 확정 취소에는 시간이 필요 없다.
+  $('confirm-time-field').hidden = confirmed;
+  $('confirm-date-field').hidden = confirmed;
+  const dateInput = $('confirm-date');
+  dateInput.min = eventData.startDate;
+  dateInput.max = eventData.endDate;
+  dateInput.value = eventData.confirmedDate || topDateValue() || eventData.startDate;
+  const ranks = topDateRanks(3);
+  $('confirm-date-hint').textContent = ranks.length
+    ? `후보 ${ranks.map((entry) => `${entry.rank}위 ${entry.dates.join(', ')}(${entry.count}명)`).join(' · ')}`
+    : '아직 등록된 일정이 없어요. 날짜를 직접 골라 주세요.';
+  $('confirm-time').value = eventData.confirmedTime || DEFAULT_MEET_TIME;
+  $('confirm-pin').value = '';
+  $('confirm-error').textContent = '';
+  $('confirm-dialog').showModal();
+  (confirmed ? $('confirm-pin') : $('confirm-time')).focus();
+}
+
+async function submitConfirm(e) {
+  e.preventDefault();
+  const pin = $('confirm-pin').value;
+  const errorEl = $('confirm-error');
+  errorEl.textContent = '';
+
+  const wasConfirmed = isScheduleConfirmed();
+  const confirmedDate = $('confirm-date').value;
+  const confirmedTime = $('confirm-time').value;
+  if (!wasConfirmed && !confirmedDate) {
+    errorEl.textContent = '만나는 날짜를 선택해 주세요.';
+    $('confirm-date').focus();
+    return;
+  }
+  if (!wasConfirmed && !CONFIRM_TIME_RE.test(confirmedTime)) {
+    errorEl.textContent = '만나는 시간을 입력해 주세요.';
+    $('confirm-time').focus();
+    return;
+  }
+  if (!/^\d{4,6}$/.test(pin)) {
+    errorEl.textContent = '관리 비밀번호는 숫자 4~6자리로 입력해 주세요.';
+    $('confirm-pin').focus();
+    return;
+  }
+  const button = $('confirm-submit');
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = '처리하는 중…';
+
+  try {
+    const res = await fetch(`/api/events/${eventId}/confirm`, {
+      method: wasConfirmed ? 'DELETE' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ managePin: pin, confirmedDate, confirmedTime }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (data.deleteLockedUntil) {
+        eventData.deleteLockedUntil = data.deleteLockedUntil;
+        $('confirm-dialog').close();
+        syncManageLockState();
+        return;
+      }
+      throw new Error(data.error || '처리하지 못했습니다.');
+    }
+    eventData = data;
+    $('confirm-dialog').close();
+    syncManageLockState();
+    syncConfirmState();
+    if (isScheduleConfirmed()) switchTab('place');
+  } catch (err) {
+    errorEl.textContent = err.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
+}
+
+// ---- 팀즈로 내보내기 ----
+// 미리보기는 서버가 만드는 Adaptive Card 와 같은 규칙으로 그린다.
+
+function formatShortDate(dateStr) {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return `${month}/${day}(${DOW_LABELS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()]})`;
+}
+
+function topDateRanks(limit = 3) {
+  const counts = buildCounts();
+  const ranked = Object.entries(counts)
+    .filter(([, count]) => count > 0)
+    .sort(([dateA, countA], [dateB, countB]) => countB - countA || dateA.localeCompare(dateB));
+  return [...new Set(ranked.map(([, count]) => count))].slice(0, limit).map((count, index) => ({
+    rank: index + 1,
+    count,
+    dates: ranked.filter(([, dateCount]) => dateCount === count).map(([date]) => formatShortDate(date)),
+  }));
+}
+
+function previewRow(label, value) {
+  return `<div class="teams-preview-row"><span>${esc(label)}</span><b>${esc(value)}</b></div>`;
+}
+
+function renderTeamsPreview() {
+  const note = $('teams-note').value.trim();
+  const place = confirmedPlace();
+
+  const rows = [
+    previewRow('날짜', `${eventData.confirmedDate} (${formatShortDate(eventData.confirmedDate)})`),
+    previewRow('시간', `${eventData.confirmedTime} · ${formatMeetTime(eventData.confirmedTime)}`),
+  ];
+  if (place) {
+    rows.push(previewRow('장소', place.name));
+    if (place.roadAddress || place.address) rows.push(previewRow('주소', place.roadAddress || place.address));
+  }
+  rows.push(previewRow('참여 인원', `${eventData.participants.length}명 / 총원 ${eventData.totalCount}명`));
+
+  $('teams-preview').innerHTML = `
+    <p class="teams-preview-title">🍻 ${esc(eventData.title)}</p>
+    <p class="teams-preview-meta">${esc(formatShortDate(eventData.confirmedDate))} ${esc(formatMeetTime(eventData.confirmedTime))}</p>
+    ${note ? `<p class="teams-preview-note">${esc(note)}</p>` : ''}
+    ${rows.join('')}
+    <p class="teams-preview-action">${place && place.link ? '네이버 지도에서 보기 · ' : ''}약속 페이지 열기 →</p>`;
+
+  renderWebhookFields();
+}
+
+// 워크플로에서 꺼내 쓸 수 있는 최상위 필드. (서버 buildWebhookPayload 와 같은 규칙)
+function renderWebhookFields() {
+  const place = confirmedPlace();
+  const fields = [
+    ['date', eventData.confirmedDate],
+    ['time', eventData.confirmedTime],
+    ['poi_name', place ? place.name : ''],
+    ['address', place ? place.roadAddress || place.address || '' : ''],
+  ];
+  if (place && place.link) fields.push(['url', place.link]);
+  $('webhook-fields').innerHTML =
+    fields.map(([key, value]) => `<div class="webhook-field"><code>${key}</code><span>${esc(value)}</span></div>`).join('') +
+    (place && place.link ? '' : '<p class="hint">네이버 지도 링크가 없어 <code>url</code> 필드는 <b>보내지 않습니다.</b> 장소를 다시 확정하며 링크를 넣으면 포함돼요.</p>');
+}
+
+// OG 설명문·공유 문구에 쓰는 요약. (서버 buildEventMeta 와 같은 규칙)
+function shareSummaryParts() {
+  const parts = [];
+  if (isScheduleConfirmed()) {
+    parts.push(`${formatShortDate(eventData.confirmedDate)} ${formatMeetTime(eventData.confirmedTime)}`);
+    const place = confirmedPlace();
+    if (place) parts.push(place.name);
+  } else {
+    const dateRanks = topDateRanks(1);
+    parts.push(dateRanks.length ? `날짜 1위 ${dateRanks[0].dates.join(', ')} (${dateRanks[0].count}명)` : '아직 등록된 일정이 없어요');
+  }
+  parts.push(`참여 ${eventData.participants.length}명 / 총원 ${eventData.totalCount}명`);
+  return parts;
+}
+
+// Share to Teams 의 compose box 기본 문구. 200자를 넘으면 잘리므로 짧게 만든다.
+function buildShareMessage() {
+  return `🍻 ${eventData.title} — ${shareSummaryParts().join(' · ')}`.slice(0, 190);
+}
+
+// 채널에 붙는 링크 카드는 서버가 넣어준 OG 태그로 만들어진다. 같은 내용을 화면에서도 보여준다.
+function renderLinkPreview() {
+  $('link-preview').innerHTML = `
+    <p class="link-preview-title">🍻 ${esc(eventData.title)}</p>
+    <p class="link-preview-desc">${esc(shareSummaryParts().join(' · '))}</p>
+    <p class="link-preview-host">${esc(location.host)}</p>`;
+}
+
+// Share to Teams 런처는 외부 스크립트라 차단되거나 늦게 로드될 수 있다.
+async function renderShareLauncher() {
+  const container = $('share-launcher');
+  const hint = $('share-launcher-hint');
+  container.innerHTML = '';
+  hint.classList.remove('validation-invalid');
+
+  if (!window.shareToMicrosoftTeams) {
+    hint.textContent = 'Teams 공유 버튼을 불러오지 못했어요. 아래 자동 게시를 쓰거나 참여 링크를 복사해 붙여넣어 주세요.';
+    hint.classList.add('validation-invalid');
+    return;
+  }
+
+  hint.textContent = '데스크톱 Chrome·Edge에서만 동작해요. 모바일에서는 참여 링크를 복사해 붙여넣어 주세요.';
+  const button = document.createElement('div');
+  button.className = 'teams-share-button';
+  button.setAttribute('data-href', location.href);
+  button.setAttribute('data-msg-text', buildShareMessage());
+  button.setAttribute('data-icon-px-size', '32');
+  container.appendChild(button);
+  try {
+    await window.shareToMicrosoftTeams.renderButtons({ elements: [button] });
+    // 런처는 아이콘만 그린다. 앵커 안에 라벨을 넣어야 글자를 눌러도 공유 창이 열린다.
+    const anchor = button.querySelector('a');
+    if (anchor && !anchor.querySelector('.share-launcher-label')) {
+      const label = document.createElement('span');
+      label.className = 'share-launcher-label';
+      label.textContent = 'Teams로 공유';
+      anchor.appendChild(label);
+    }
+  } catch {
+    hint.textContent = 'Teams 공유 버튼을 표시하지 못했어요. 아래 자동 게시를 이용해 주세요.';
+    hint.classList.add('validation-invalid');
+  }
+}
+
+// 웹후크 URL은 서버에 저장하지 않는다. 대신 이 브라우저에만 기억해 재입력을 덜어 준다.
+const WEBHOOK_STORAGE_KEY = 'dinner-teams-webhook';
+
+function readStoredWebhook() {
+  try {
+    return localStorage.getItem(WEBHOOK_STORAGE_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function storeWebhook(url) {
+  try {
+    if (url) localStorage.setItem(WEBHOOK_STORAGE_KEY, url);
+    else localStorage.removeItem(WEBHOOK_STORAGE_KEY);
+  } catch {
+    // 시크릿 모드 등 저장이 막힌 환경에서는 기억하지 않고 넘어간다.
+  }
+}
+
+let pendingPlaceId = null;
+
+function openPlaceDialog(placeId) {
+  const place = (eventData.places || []).find((candidate) => candidate.id === placeId);
+  if (!place) return;
+  const isConfirmed = place.id === eventData.confirmedPlaceId;
+  pendingPlaceId = placeId;
+  $('place-dialog-title').textContent = isConfirmed ? '장소 확정을 취소할까요?' : '이 곳으로 확정할까요?';
+  $('place-dialog-copy').textContent = isConfirmed
+    ? `'${place.name}' 확정을 취소하면 팀즈로 공유할 수 없게 돼요. 후보지와 투표는 그대로 남습니다.`
+    : `'${place.name}'을(를) 최종 장소로 확정하면 팀즈로 공유할 수 있게 돼요.`;
+  $('place-dialog-submit').textContent = isConfirmed ? '확정 취소하기' : '장소 확정하기';
+  $('place-dialog-link-field').hidden = isConfirmed;
+  $('place-confirm-link').value = place.link || '';
+  $('place-confirm-pin').value = '';
+  $('place-dialog-error').textContent = '';
+  $('place-dialog').showModal();
+  $('place-confirm-pin').focus();
+}
+
+async function submitPlaceConfirm(e) {
+  e.preventDefault();
+  const errorEl = $('place-dialog-error');
+  errorEl.textContent = '';
+  const pin = $('place-confirm-pin').value;
+  if (!/^\d{4,6}$/.test(pin)) {
+    errorEl.textContent = '관리 비밀번호는 숫자 4~6자리로 입력해 주세요.';
+    $('place-confirm-pin').focus();
+    return;
+  }
+
+  const isConfirmed = pendingPlaceId === eventData.confirmedPlaceId;
+  const button = $('place-dialog-submit');
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = '처리하는 중…';
+  try {
+    const res = await fetch(`/api/events/${eventId}/confirm-place`, {
+      method: isConfirmed ? 'DELETE' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ managePin: pin, placeId: pendingPlaceId, link: $('place-confirm-link').value.trim() }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (data.deleteLockedUntil) {
+        eventData.deleteLockedUntil = data.deleteLockedUntil;
+        $('place-dialog').close();
+        syncManageLockState();
+        return;
+      }
+      throw new Error(data.error || '처리하지 못했어요.');
+    }
+    eventData = data;
+    $('place-dialog').close();
+    syncConfirmState();
+    renderPlacePanel();
+  } catch (err) {
+    errorEl.textContent = err.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
+}
+
+function openTeamsDialog() {
+  const storedWebhook = readStoredWebhook();
+  $('teams-webhook').value = storedWebhook;
+  $('teams-webhook-clear').hidden = !storedWebhook;
+  $('teams-note').value = '';
+  $('teams-error').textContent = '';
+  $('teams-info').textContent = '';
+  $('teams-advanced').open = false;
+  renderLinkPreview();
+  renderTeamsPreview();
+  renderShareLauncher();
+  $('teams-dialog').showModal();
+}
+
+async function submitTeamsExport(e) {
+  e.preventDefault();
+  const errorEl = $('teams-error');
+  const infoEl = $('teams-info');
+  errorEl.textContent = '';
+  infoEl.textContent = '';
+
+  const webhookUrl = $('teams-webhook').value.trim();
+  if (!webhookUrl) {
+    errorEl.textContent = '웹후크 URL을 입력해 주세요.';
+    $('teams-webhook').focus();
+    return;
+  }
+
+  const button = $('teams-submit');
+  const originalLabel = button.innerHTML;
+  button.disabled = true;
+  button.textContent = '보내는 중…';
+  try {
+    const res = await fetch(`/api/events/${eventId}/teams-export`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhookUrl, note: $('teams-note').value.trim() }),
+    });
+    const data = await res.json().catch(() => ({}));
+    // 서버의 URL 형식 검증(400)을 통과했다면 브라우저에 기억해 둔다.
+    // (401 등 워크플로 설정 문제는 URL 자체는 맞는 경우라 함께 기억한다)
+    if (res.status !== 400) {
+      storeWebhook(webhookUrl);
+      $('teams-webhook-clear').hidden = false;
+    }
+    if (!res.ok) throw new Error(data.error || '내보내지 못했어요.');
+    infoEl.textContent = '채널로 보냈어요! 팀즈에서 확인해 주세요.';
+    setTimeout(() => $('teams-dialog').close(), 1400);
+  } catch (err) {
+    errorEl.textContent = err.message;
+  } finally {
+    button.disabled = false;
+    button.innerHTML = originalLabel;
+  }
+}
+
 async function init() {
-  eventData = eventId ? await loadEvent() : null;
+  const [loadedEvent, loadedConfig] = await Promise.all([eventId ? loadEvent() : null, loadConfig()]);
+  eventData = loadedEvent;
+  appConfig = loadedConfig;
   if (!eventData) {
     $('not-found').hidden = false;
     return;
   }
   $('app').hidden = false;
+  activeVoterName = readStoredVoter();
 
   document.title = `${eventData.title} - 회식 날짜 잡기`;
 
@@ -411,7 +1180,8 @@ async function init() {
   renderHead();
   renderVotePeople();
   syncNameInputState();
-  syncCancelEventState();
+  syncManageLockState();
+  syncConfirmState();
 
   $('tab-vote').addEventListener('click', () => switchTab('vote'));
   $('tab-result').addEventListener('click', () => switchTab('result'));
@@ -457,6 +1227,76 @@ async function init() {
     }
     setTimeout(() => ($('copy-link').textContent = '🔗 참여 링크 복사'), 1500);
   });
+  $('teams-dialog-form').addEventListener('submit', submitTeamsExport);
+  $('teams-dialog-close').addEventListener('click', () => $('teams-dialog').close());
+  $('teams-webhook-clear').addEventListener('click', () => {
+    storeWebhook(null);
+    $('teams-webhook').value = '';
+    $('teams-webhook-clear').hidden = true;
+    $('teams-webhook').focus();
+  });
+  $('teams-note').addEventListener('input', renderTeamsPreview);
+
+  $('tab-place').addEventListener('click', () => switchTab('place'));
+
+  $('confirm-event').addEventListener('click', openConfirmDialog);
+  $('confirm-dialog-form').addEventListener('submit', submitConfirm);
+  $('confirm-dialog-close').addEventListener('click', () => $('confirm-dialog').close());
+
+  $('place-search-btn').addEventListener('click', searchPlaces);
+  $('place-query').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.isComposing) {
+      e.preventDefault();
+      searchPlaces();
+    }
+  });
+  $('place-add-btn').addEventListener('click', addPlace);
+
+  // 검색 결과: 한 번 더 누르면 선택 해제
+  $('place-results').addEventListener('click', (e) => {
+    const result = e.target.closest('[data-result]');
+    if (!result) return;
+    const index = Number(result.dataset.result);
+    selectedResultIndex = selectedResultIndex === index ? null : index;
+    renderSearchResults();
+  });
+
+  $('place-voters').addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-voter]');
+    if (chip) selectVoter(chip.dataset.voter);
+  });
+  $('place-voters').addEventListener('keydown', (e) => {
+    const chip = e.target.closest('[data-voter]');
+    if (chip && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      selectVoter(chip.dataset.voter);
+    }
+  });
+
+  // 후보지 카드: ♥ → 투표 토글, ✕ → 후보 삭제
+  $('place-list').addEventListener('click', (e) => {
+    const shareButton = e.target.closest('[data-share]');
+    if (shareButton) {
+      openTeamsDialog();
+      return;
+    }
+    const voteButton = e.target.closest('[data-vote]');
+    if (voteButton) {
+      votePlace(voteButton.dataset.vote);
+      return;
+    }
+    const deleteButton = e.target.closest('[data-place-del]');
+    if (deleteButton) {
+      deletePlace(deleteButton.dataset.placeDel);
+      return;
+    }
+    const confirmButton = e.target.closest('[data-place-confirm]');
+    if (confirmButton) openPlaceDialog(confirmButton.dataset.placeConfirm);
+  });
+
+  $('place-dialog-form').addEventListener('submit', submitPlaceConfirm);
+  $('place-dialog-close').addEventListener('click', () => $('place-dialog').close());
+
   $('cancel-event').addEventListener('click', openCancelDialog);
   $('cancel-dialog-form').addEventListener('submit', cancelEvent);
   $('cancel-dialog-close').addEventListener('click', () => $('cancel-dialog').close());

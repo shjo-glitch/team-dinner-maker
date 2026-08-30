@@ -22,9 +22,17 @@
           <span class="chip" id="event-theme"></span>
           <span class="chip" id="event-range"></span>
           <span class="chip" id="event-progress"></span>
+          <span class="chip chip-time" id="event-time" hidden></span>
         </div>
+        <ol class="steps" id="steps" aria-label="진행 단계">
+          <li data-step="1"><b>1</b>일정 만들기</li>
+          <li data-step="2"><b>2</b>일정 투표</li>
+          <li data-step="3"><b>3</b>일정·장소 정하기</li>
+          <li data-step="4"><b>4</b>공유하기</li>
+        </ol>
         <div class="toolbar">
           <button type="button" class="btn ghost small" id="copy-link">🔗 참여 링크 복사</button>
+          <button type="button" class="btn ghost small" id="confirm-event">📍 일정 확정하기</button>
           <button type="button" class="btn ghost danger small" id="cancel-event">약속 파기하기</button>
         </div>
       </div>
@@ -32,6 +40,7 @@
       <div class="tabs">
         <button type="button" id="tab-vote" class="active">📅 내 일정 등록</button>
         <button type="button" id="tab-result">📊 결과 보기</button>
+        <button type="button" id="tab-place" hidden>📍 어디서 볼까?</button>
       </div>
 
       <!-- 내 일정 등록 -->
@@ -108,6 +117,53 @@
           <div class="people-list" id="result-people"></div>
         </div>
       </section>
+
+      <!-- 어디서 볼까? (일정 확정 후에만 열린다) -->
+      <section id="panel-place" hidden>
+        <section class="card venue-head" aria-labelledby="venue-title">
+          <p class="section-kicker">THE VENUE</p>
+          <h2 id="venue-title">어디서 볼까?</h2>
+          <p class="venue-time" id="venue-time" hidden></p>
+          <div class="confirmed-place" id="confirmed-place" hidden></div>
+          <p class="venue-copy">후보지를 등록하면 지도에 핀으로 표시돼요. 가고 싶은 곳에 투표해 주세요.</p>
+          <div class="field voter-field">
+            <label>나는 누구인가요?</label>
+            <div class="people-list" id="place-voters"></div>
+            <p class="hint" id="place-voter-hint">이름을 선택하면 투표할 수 있어요.</p>
+          </div>
+        </section>
+
+        <div class="card place-map-card">
+          <div class="place-map" id="place-map"></div>
+          <p class="place-map-note" id="place-map-note" hidden></p>
+        </div>
+
+        <div class="card">
+          <h2>후보지 등록</h2>
+          <div class="field">
+            <label for="place-query">장소 이름 검색</label>
+            <div class="search-row">
+              <input type="text" id="place-query" placeholder="예) 을지로 노가리" maxlength="60" autocomplete="off" />
+              <button type="button" class="btn small" id="place-search-btn">검색</button>
+            </div>
+            <p class="hint" id="place-search-hint">네이버 지역검색으로 <b>최대 5곳</b>까지 찾아드려요. 원하는 곳이 안 보이면 '지역명 + 상호'로 좁혀 주세요.</p>
+          </div>
+          <div class="place-results" id="place-results"></div>
+          <div class="field">
+            <label for="place-link">네이버 지도 링크 (선택)</label>
+            <input type="text" id="place-link" placeholder="https://naver.me/..." maxlength="300" />
+            <p class="hint">공유한 POI 링크를 넣으면 후보 카드에서 그 링크로 바로 열려요. 비워두면 이름과 주소로 지도 검색 링크를 만들어 둡니다.</p>
+          </div>
+          <button type="button" class="btn block" id="place-add-btn" disabled><span>후보로 등록</span><span aria-hidden="true">→</span></button>
+          <p class="error-msg" id="place-error"></p>
+          <p class="info-msg" id="place-info"></p>
+        </div>
+
+        <div class="card">
+          <h2>후보지 (<span id="place-count">0</span>곳)</h2>
+          <div class="place-list" id="place-list"></div>
+        </div>
+      </section>
     </div>
 
     <div id="not-found" class="card" hidden>
@@ -115,6 +171,114 @@
       <p class="empty-note">링크가 정확한지 확인해 주세요.</p>
       <p style="margin-top: 14px;"><a class="btn small" href="/">새 약속 만들기</a></p>
     </div>
+
+    <dialog class="cancel-dialog confirm-dialog" id="place-dialog" aria-labelledby="place-dialog-title">
+      <form class="cancel-dialog-form" id="place-dialog-form" novalidate>
+        <p class="section-kicker">FINAL VENUE</p>
+        <h2 id="place-dialog-title">이 곳으로 확정할까요?</h2>
+        <p class="cancel-dialog-copy" id="place-dialog-copy"></p>
+        <div class="field" id="place-dialog-link-field">
+          <label for="place-confirm-link">네이버 지도 링크 (선택)</label>
+          <input type="url" id="place-confirm-link" placeholder="https://naver.me/..." maxlength="300" autocomplete="off" spellcheck="false" />
+          <p class="hint">넣어두면 팀즈로 보낼 때 <b>정확한 지도 링크</b>가 함께 전달돼요. 비우면 링크 없이 보냅니다.</p>
+        </div>
+        <div class="field">
+          <label for="place-confirm-pin">관리 비밀번호</label>
+          <input type="password" id="place-confirm-pin" inputmode="numeric" autocomplete="current-password" pattern="[0-9]{4,6}" maxlength="6" placeholder="숫자 4~6자리" required />
+        </div>
+        <p class="error-msg" id="place-dialog-error" aria-live="polite"></p>
+        <div class="cancel-dialog-actions">
+          <button type="button" class="btn ghost small" id="place-dialog-close">취소</button>
+          <button type="submit" class="btn small" id="place-dialog-submit">장소 확정하기</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="cancel-dialog teams-dialog" id="teams-dialog" aria-labelledby="teams-dialog-title">
+      <div class="cancel-dialog-form">
+        <p class="section-kicker">SHARE TO TEAMS</p>
+        <h2 id="teams-dialog-title">팀즈로 공유하기</h2>
+
+        <section class="share-method">
+          <h3 class="share-method-title">
+            <span class="share-method-no">1</span>채널 골라서 보내기
+            <span class="share-method-tag ok">준비 불필요</span>
+          </h3>
+          <p class="share-method-copy">
+            버튼을 누르면 Teams 공유 창이 열려요. 거기서 <b>채널이나 채팅을 고르고</b> [공유]를 누르면 끝입니다.
+          </p>
+          <div class="share-launcher" id="share-launcher"></div>
+          <p class="hint" id="share-launcher-hint">데스크톱 Chrome·Edge에서만 동작해요.</p>
+          <p class="share-preview-label">이렇게 보여요</p>
+          <div class="link-preview" id="link-preview"></div>
+        </section>
+
+        <details class="share-method share-advanced" id="teams-advanced">
+          <summary>
+            <span class="share-method-no">2</span>자동 게시 (고급)
+            <span class="share-method-tag">채널당 1회 설정</span>
+          </summary>
+          <p class="share-method-copy">
+            사람이 누르지 않아도 채널에 카드가 올라갑니다. 대신 채널마다 <b>워크플로</b>를 한 번 만들어
+            웹후크 URL을 받아야 해요. (Teams 채널 › <b>⋯</b> › 워크플로 › “웹후크 요청이 수신되면 채널에 게시”)
+          </p>
+          <form id="teams-dialog-form" novalidate>
+            <div class="field">
+              <label for="teams-webhook">웹후크 URL</label>
+              <input type="url" id="teams-webhook" placeholder="https://prod-00.koreacentral.logic.azure.com:443/workflows/..." autocomplete="off" spellcheck="false" />
+              <p class="hint">한 번 보내면 URL이 <b>이 브라우저에 저장</b>돼 다음부터 자동으로 채워져요. (서버에는 저장되지 않아요)
+                <button type="button" class="link-btn" id="teams-webhook-clear" hidden>저장된 URL 지우기</button></p>
+            </div>
+            <div class="field">
+              <label for="teams-note">한 줄 메모 (선택)</label>
+              <input type="text" id="teams-note" maxlength="200" placeholder="예) 금요일까지 일정 입력 부탁드려요!" />
+            </div>
+            <div class="field">
+              <label>보낼 카드 미리보기</label>
+              <div class="teams-preview" id="teams-preview" aria-live="polite"></div>
+            </div>
+            <div class="field">
+              <label>워크플로가 꺼내 쓸 수 있는 필드</label>
+              <div class="webhook-fields" id="webhook-fields"></div>
+            </div>
+            <p class="error-msg" id="teams-error" aria-live="polite"></p>
+            <p class="info-msg" id="teams-info" aria-live="polite"></p>
+            <button type="submit" class="btn block" id="teams-submit"><span>채널로 자동 게시</span><span aria-hidden="true">→</span></button>
+          </form>
+        </details>
+
+        <div class="cancel-dialog-actions">
+          <button type="button" class="btn ghost small" id="teams-dialog-close">닫기</button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog class="cancel-dialog confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-dialog-title">
+      <form class="cancel-dialog-form" id="confirm-dialog-form" novalidate>
+        <p class="section-kicker">NEXT STEP</p>
+        <h2 id="confirm-dialog-title">일정을 확정할까요?</h2>
+        <p class="cancel-dialog-copy" id="confirm-dialog-copy"></p>
+        <div class="field" id="confirm-date-field">
+          <label for="confirm-date">언제 만날까요?</label>
+          <input type="date" id="confirm-date" required />
+          <p class="hint" id="confirm-date-hint"></p>
+        </div>
+        <div class="field" id="confirm-time-field">
+          <label for="confirm-time">몇 시에 볼까요?</label>
+          <input type="time" id="confirm-time" step="300" required />
+          <p class="hint">참여자에게 보이는 만나는 시간이에요. 다시 확정하면 바꿀 수 있어요.</p>
+        </div>
+        <div class="field">
+          <label for="confirm-pin">관리 비밀번호</label>
+          <input type="password" id="confirm-pin" inputmode="numeric" autocomplete="current-password" pattern="[0-9]{4,6}" maxlength="6" placeholder="숫자 4~6자리" required />
+        </div>
+        <p class="error-msg" id="confirm-error" aria-live="polite"></p>
+        <div class="cancel-dialog-actions">
+          <button type="button" class="btn ghost small" id="confirm-dialog-close">취소</button>
+          <button type="submit" class="btn small" id="confirm-submit">확정하기</button>
+        </div>
+      </form>
+    </dialog>
 
     <dialog class="cancel-dialog" id="cancel-dialog" aria-labelledby="cancel-dialog-title">
       <form class="cancel-dialog-form" id="cancel-dialog-form" novalidate>
@@ -144,8 +308,10 @@
     </dialog>
   </div>
 
+  <script async defer src="https://teams.microsoft.com/share/launcher.js"></script>
   <script src="/js/holidays.js"></script>
   <script src="/js/calendar.js"></script>
+  <script src="/js/place-map.js"></script>
   <script src="/js/event.js"></script>
 </body>
 </html>
