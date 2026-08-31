@@ -43,8 +43,8 @@
 
       <div class="tabs">
         <button type="button" id="tab-vote" class="active">📅 내 일정 등록</button>
-        <button type="button" id="tab-result">📊 결과 보기</button>
         <button type="button" id="tab-place" hidden>📍 어디서 볼까?</button>
+        <button type="button" id="tab-result">📊 결과 보기</button>
       </div>
 
       <!-- 내 일정 등록 -->
@@ -86,12 +86,23 @@
 
       <!-- 결과 보기 -->
       <section id="panel-result" hidden>
-        <section class="card candidate-ranking" aria-labelledby="candidate-ranking-title">
+        <section class="card candidate-ranking" id="date-ranking-card" aria-labelledby="candidate-ranking-title">
           <div class="candidate-ranking-head">
-            <p class="section-kicker">THE SHORTLIST</p>
+            <p class="section-kicker" id="date-ranking-kicker">THE SHORTLIST</p>
             <h2 id="candidate-ranking-title">회식 날 후보 순위</h2>
           </div>
           <div class="candidate-ranking-list" id="candidate-ranking" aria-live="polite"></div>
+        </section>
+
+        <section class="card candidate-ranking" id="place-ranking-card" aria-labelledby="place-ranking-title">
+          <div class="candidate-ranking-head">
+            <p class="section-kicker" id="place-ranking-kicker">THE VENUE SHORTLIST</p>
+            <h2 id="place-ranking-title">회식 장소 후보 순위</h2>
+          </div>
+          <div class="candidate-ranking-list" id="place-ranking" aria-live="polite"></div>
+          <div class="ranking-foot">
+            <button type="button" class="btn ghost small" id="place-ranking-all" hidden>전체 후보 보기</button>
+          </div>
         </section>
 
         <div class="card">
@@ -175,6 +186,17 @@
       <p class="empty-note">링크가 정확한지 확인해 주세요.</p>
       <p style="margin-top: 14px;"><a class="btn small" href="/">새 약속 만들기</a></p>
     </div>
+
+    <dialog class="cancel-dialog ranking-dialog" id="place-ranking-dialog" aria-labelledby="place-ranking-dialog-title">
+      <div class="cancel-dialog-form">
+        <p class="section-kicker">ALL CANDIDATES</p>
+        <h2 id="place-ranking-dialog-title">회식 장소 전체 후보</h2>
+        <div class="candidate-ranking-list ranking-dialog-list" id="place-ranking-full"></div>
+        <div class="cancel-dialog-actions">
+          <button type="button" class="btn ghost small" id="place-ranking-close">닫기</button>
+        </div>
+      </div>
+    </dialog>
 
     <dialog class="cancel-dialog confirm-dialog" id="place-dialog" aria-labelledby="place-dialog-title">
       <form class="cancel-dialog-form" id="place-dialog-form" novalidate>

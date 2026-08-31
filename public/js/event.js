@@ -131,6 +131,23 @@ function formatCandidateDate(dateStr) {
 
 function renderCandidateRanking(counts) {
   const rankingEl = $('candidate-ranking');
+
+  // 일정이 확정되면 후보 순위 대신 확정된 일정을 보여준다.
+  if (isScheduleConfirmed()) {
+    $('date-ranking-card').classList.add('confirmed-mode');
+    $('date-ranking-kicker').textContent = 'CONFIRMED';
+    $('candidate-ranking-title').textContent = '확정된 일정';
+    rankingEl.innerHTML = `
+      <div class="confirmed-summary">
+        <p class="confirmed-summary-main">${esc(formatShortDate(eventData.confirmedDate))} ${esc(formatMeetTime(eventData.confirmedTime))}</p>
+        <p class="confirmed-summary-sub">${esc(eventData.confirmedDate)} · ${esc(eventData.confirmedTime)}</p>
+      </div>`;
+    return;
+  }
+  $('date-ranking-card').classList.remove('confirmed-mode');
+  $('date-ranking-kicker').textContent = 'THE SHORTLIST';
+  $('candidate-ranking-title').textContent = '회식 날 후보 순위';
+
   const rankedDates = Object.entries(counts)
     .filter(([, count]) => count > 0)
     .sort(([dateA, countA], [dateB, countB]) => countB - countA || dateA.localeCompare(dateB));
@@ -237,11 +254,73 @@ function renderVotePeople() {
     .join('');
 }
 
+// 장소 후보를 득표순 순위 행으로 그린다. (동점은 같은 순위)
+function placeRankingRows(places) {
+  let rank = 0;
+  let prevVotes = -1;
+  return places
+    .map((place, index) => {
+      const votes = (place.votes || []).length;
+      if (votes !== prevVotes) {
+        rank = index + 1;
+        prevVotes = votes;
+      }
+      return `
+        <div class="candidate-ranking-row rank-${Math.min(rank, 3)}">
+          <span class="candidate-rank-label">${rank}위</span>
+          <span class="candidate-rank-dates place-rank-name">${esc(place.name)}<small class="place-rank-votes">♥ ${votes}</small></span>
+        </div>`;
+    })
+    .join('');
+}
+
+// 결과 탭의 '회식 장소' 카드: 미확정=득표 상위 5곳 / 확정=확정 장소 레이아웃
+function renderPlaceRanking() {
+  const card = $('place-ranking-card');
+  const listEl = $('place-ranking');
+  const allButton = $('place-ranking-all');
+  const confirmed = confirmedPlace();
+
+  if (confirmed) {
+    card.classList.add('confirmed-mode');
+    $('place-ranking-kicker').textContent = 'CONFIRMED';
+    $('place-ranking-title').textContent = '확정된 장소';
+    allButton.hidden = true;
+    listEl.innerHTML = `
+      <div class="confirmed-summary">
+        <p class="confirmed-summary-main">${esc(confirmed.name)}</p>
+        <p class="confirmed-summary-sub">${esc(confirmed.roadAddress || confirmed.address || '')}</p>
+        <a class="confirmed-summary-link" href="${esc(placeMapLink(confirmed))}" target="_blank" rel="noopener noreferrer">네이버 지도에서 보기 ↗</a>
+      </div>`;
+    return;
+  }
+
+  card.classList.remove('confirmed-mode');
+  $('place-ranking-kicker').textContent = 'THE VENUE SHORTLIST';
+  $('place-ranking-title').textContent = '회식 장소 후보 순위';
+
+  const places = rankedPlaces();
+  if (places.length === 0) {
+    listEl.innerHTML = "<p class=\"candidate-ranking-empty\">아직 등록된 후보지가 없어요. '어디서 볼까?' 탭에서 등록해 보세요.</p>";
+    allButton.hidden = true;
+    return;
+  }
+  // 카드에는 좋아요 상위 5곳만, 나머지는 '전체 후보 보기' 팝업으로.
+  listEl.innerHTML = placeRankingRows(places.slice(0, 5));
+  allButton.hidden = places.length <= 5;
+}
+
+function openPlaceRankingDialog() {
+  $('place-ranking-full').innerHTML = placeRankingRows(rankedPlaces());
+  $('place-ranking-dialog').showModal();
+}
+
 function renderResult() {
   const counts = buildCounts();
   // 뱃지 농도: 1명이 선택할 때마다 (1/참여자 수)씩 진해진다.
   resultCal.setResult(counts, eventData.participants.length);
   renderCandidateRanking(counts);
+  renderPlaceRanking();
 
   $('result-people-count').textContent = eventData.participants.length;
   const wrap = $('result-people');
@@ -1471,6 +1550,9 @@ async function init() {
     const confirmButton = e.target.closest('[data-place-confirm]');
     if (confirmButton) openPlaceDialog(confirmButton.dataset.placeConfirm);
   });
+
+  $('place-ranking-all').addEventListener('click', openPlaceRankingDialog);
+  $('place-ranking-close').addEventListener('click', () => $('place-ranking-dialog').close());
 
   $('place-dialog-form').addEventListener('submit', submitPlaceConfirm);
   $('place-dialog-close').addEventListener('click', () => $('place-dialog').close());

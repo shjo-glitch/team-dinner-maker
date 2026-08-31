@@ -273,6 +273,24 @@ input:focus-visible { border-color: var(--accent); background: #fffefa; box-shad
 .share-advanced .share-method-no { color: var(--ink); background: var(--paper-deep); }
 .share-advanced .btn.block { min-height: 46px; margin-top: 4px; }
 
+/* 결과 탭: 확정 모드 카드 + 장소 순위 */
+.candidate-ranking.confirmed-mode { background-color: #f2f8f4; background-image: radial-gradient(circle at 100% 0, rgba(60, 179, 113, 0.16), transparent 32%); }
+.candidate-ranking.confirmed-mode::before { background: #3cb371; }
+.candidate-ranking.confirmed-mode .section-kicker { color: var(--success); }
+.confirmed-summary { margin-top: 4px; padding: 4px 2px 0; }
+.confirmed-summary-main { color: var(--ink); font-family: 'DM Serif Display', 'Gowun Batang', serif; font-size: clamp(24px, 5vw, 32px); font-weight: 400; letter-spacing: -0.04em; line-height: 1.25; word-break: keep-all; }
+.confirmed-summary-sub { margin-top: 5px; color: var(--ink-soft); font-size: 13px; word-break: keep-all; }
+.confirmed-summary-link { display: inline-block; margin-top: 10px; color: var(--success); font-size: 12px; font-weight: 700; text-decoration: none; }
+.confirmed-summary-link:hover { text-decoration: underline; }
+.place-rank-name { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.place-rank-name > small.place-rank-votes { flex: 0 0 auto; color: var(--accent); font-family: 'Gowun Dodum', sans-serif; font-size: 12px; font-weight: 700; }
+.ranking-foot { display: flex; justify-content: flex-end; margin-top: 13px; }
+.ranking-foot:has(> [hidden]) { display: none; }
+.ranking-dialog { width: min(calc(100% - 32px), 460px); }
+.ranking-dialog .section-kicker { color: var(--mustard); }
+.ranking-dialog-list { max-height: 55vh; margin-top: 16px; overflow-y: auto; }
+.ranking-dialog .cancel-dialog-actions { margin-top: 18px; }
+
 /* 진행 단계 */
 .steps { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; list-style: none; }
 .steps li { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px 5px 6px; color: #9c9086; border: 1px solid var(--line); border-radius: 999px; background: rgba(255, 253, 248, 0.6); font-size: 11px; font-weight: 700; }
