@@ -383,11 +383,11 @@ function formatLockRemaining(lockedUntil) {
   return `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`;
 }
 
-// 확정 스위치의 상태(ON/OFF)와 라벨을 함께 갱신한다.
+// 확정 토글 버튼의 상태(enable/disable)와 라벨을 함께 갱신한다.
 function setSwitchState(button, on, label) {
   button.classList.toggle('on', on);
   button.setAttribute('aria-pressed', String(on));
-  button.querySelector('.switch-label').textContent = label;
+  button.querySelector('.toggle-label').textContent = label;
 }
 
 // 파기·확정이 같은 관리 비밀번호 잠금을 공유하므로 버튼들을 함께 잠근다.
