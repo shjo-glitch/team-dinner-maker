@@ -56,6 +56,13 @@ function renderSteps() {
     item.classList.toggle('done', order < step);
     item.classList.toggle('current', order === step);
   }
+  // 공유하기 단계가 되면 '3 공유하기' 배지가 곧 공유 진입점이 된다.
+  const shareStep = $('steps').querySelector('[data-step="3"]');
+  const shareable = isFullyConfirmed();
+  shareStep.classList.toggle('clickable', shareable);
+  shareStep.setAttribute('role', shareable ? 'button' : '');
+  shareStep.tabIndex = shareable ? 0 : -1;
+  shareStep.title = shareable ? '팀즈로 공유하기' : '';
 }
 
 let eventData = null;
@@ -672,14 +679,6 @@ function renderPlaceList() {
             <button type="button" class="place-confirm-btn${isConfirmed ? ' confirmed' : ''}" data-place-confirm="${esc(place.id)}">
               ${isConfirmed ? '✓ 확정된 장소 · 다시 누르면 확정 취소' : '이 곳으로 확정하기'}
             </button>
-            ${isConfirmed && isScheduleConfirmed() ? `
-            <button type="button" class="share-btn" data-share title="확정된 일정을 팀즈로 공유">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M19 13v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" />
-                <path d="M14 4h6v6" />
-                <path d="M20 4l-9 9" />
-              </svg>공유
-            </button>` : ''}
           </div>
         </article>`;
     })
@@ -922,6 +921,7 @@ async function submitConfirm(e) {
   errorEl.textContent = '';
 
   const wasConfirmed = isScheduleConfirmed();
+  const wasFullyConfirmed = isFullyConfirmed();
   const confirmedDate = $('confirm-date').value;
   const confirmedTime = $('confirm-time').value;
   if (!wasConfirmed && !confirmedDate) {
@@ -967,6 +967,7 @@ async function submitConfirm(e) {
     // 공유 버튼은 일정+장소가 모두 확정됐을 때만 나오므로 후보 목록도 다시 그린다.
     renderPlaceList();
     if (isScheduleConfirmed()) switchTab('place');
+    maybeEnterShareStep(wasFullyConfirmed);
   } catch (err) {
     errorEl.textContent = err.message;
   } finally {
@@ -1194,6 +1195,7 @@ async function submitPlaceConfirm(e) {
   }
 
   const isConfirmed = pendingPlaceId === eventData.confirmedPlaceId;
+  const wasFullyConfirmed = isFullyConfirmed();
   const button = $('place-dialog-submit');
   const originalLabel = button.textContent;
   button.disabled = true;
@@ -1218,6 +1220,7 @@ async function submitPlaceConfirm(e) {
     $('place-dialog').close();
     syncConfirmState();
     renderPlacePanel();
+    maybeEnterShareStep(wasFullyConfirmed);
   } catch (err) {
     errorEl.textContent = err.message;
   } finally {
@@ -1335,6 +1338,16 @@ function renderKakaoHint() {
   if (appConfig.kakaoJsKey) hint.textContent = '';
   else if (navigator.share && isMobileDevice()) hint.textContent = '공유 창이 열리면 목록에서 카카오톡을 선택해 주세요.';
   else hint.textContent = '이 브라우저에서는 공유 문구가 복사돼요. 카카오톡에 붙여넣어 주세요.';
+}
+
+// 방금의 확정으로 일정·장소가 모두 갖춰졌으면 공유 단계로 넘긴다:
+// '어디서 볼까?' 탭의 확정 카드로 이동시키고 공유 다이얼로그를 바로 연다.
+function maybeEnterShareStep(wasFullyConfirmed) {
+  if (wasFullyConfirmed || !isFullyConfirmed()) return;
+  switchTab('place');
+  const confirmedCard = document.querySelector('.place-card.confirmed-card');
+  if (confirmedCard) confirmedCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  openTeamsDialog();
 }
 
 function openTeamsDialog() {
@@ -1532,11 +1545,6 @@ async function init() {
 
   // 후보지 카드: ♥ → 투표 토글, ✕ → 후보 삭제
   $('place-list').addEventListener('click', (e) => {
-    const shareButton = e.target.closest('[data-share]');
-    if (shareButton) {
-      openTeamsDialog();
-      return;
-    }
     const voteButton = e.target.closest('[data-vote]');
     if (voteButton) {
       votePlace(voteButton.dataset.vote);
@@ -1549,6 +1557,17 @@ async function init() {
     }
     const confirmButton = e.target.closest('[data-place-confirm]');
     if (confirmButton) openPlaceDialog(confirmButton.dataset.placeConfirm);
+  });
+
+  const shareStepBadge = $('steps').querySelector('[data-step="3"]');
+  shareStepBadge.addEventListener('click', () => {
+    if (isFullyConfirmed()) openTeamsDialog();
+  });
+  shareStepBadge.addEventListener('keydown', (e) => {
+    if (isFullyConfirmed() && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      openTeamsDialog();
+    }
   });
 
   $('place-ranking-all').addEventListener('click', openPlaceRankingDialog);

@@ -300,6 +300,9 @@ input:focus-visible { border-color: var(--accent); background: #fffefa; box-shad
 .steps li.done b { background: #3cb371; font-size: 0; }
 .steps li.done b::before { content: '✓'; color: #fff; font-size: 10px; font-weight: 700; line-height: 1; }
 .steps li.current { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.steps li.clickable { cursor: pointer; transition: background 150ms ease, box-shadow 150ms ease, transform 150ms ease; }
+.steps li.clickable:hover { background: #f0d9d0; box-shadow: 2px 2px 0 var(--mustard); transform: translateY(-1px); }
+.steps li.clickable::after { margin-left: 2px; content: '↗'; font-size: 10px; }
 .steps li.current b { background: var(--accent); }
 
 /* 검색 결과: 선택 버튼과 지도 링크를 나란히 */
