@@ -781,13 +781,20 @@ function renderPlacePanel() {
   updatePlaceMap();
 }
 
-// 가장 많이 겹친 날짜의 원본 값. 확정 다이얼로그 기본값으로 쓴다.
-function topDateValue() {
+// 가장 많은 인원이 겹친 1위 후보 날짜들(yyyy-MM-dd, 동점 포함)과 그 인원수.
+// 일정 확정은 이 날짜들 중에서만 고를 수 있다. (서버 topCandidateDates 와 같은 규칙)
+function topCandidateDates() {
   const counts = buildCounts();
-  const ranked = Object.entries(counts)
-    .filter(([, count]) => count > 0)
-    .sort(([dateA, countA], [dateB, countB]) => countB - countA || dateA.localeCompare(dateB));
-  return ranked.length ? ranked[0][0] : '';
+  const dates = Object.keys(counts);
+  if (dates.length === 0) return { dates: [], count: 0 };
+  const maxCount = Math.max(...Object.values(counts));
+  return { dates: dates.filter((date) => counts[date] === maxCount).sort(), count: maxCount };
+}
+
+// 확정 날짜 선택지 라벨: '2026. 9. 8. (화)'
+function formatConfirmOption(dateStr) {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return `${year}. ${month}. ${day}. (${DOW_LABELS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()]})`;
 }
 
 function openConfirmDialog() {
@@ -800,14 +807,19 @@ function openConfirmDialog() {
   // 확정 취소에는 시간이 필요 없다.
   $('confirm-time-field').hidden = confirmed;
   $('confirm-date-field').hidden = confirmed;
-  const dateInput = $('confirm-date');
-  dateInput.min = eventData.startDate;
-  dateInput.max = eventData.endDate;
-  dateInput.value = eventData.confirmedDate || topDateValue() || eventData.startDate;
-  const ranks = topDateRanks(3);
-  $('confirm-date-hint').textContent = ranks.length
-    ? `후보 ${ranks.map((entry) => `${entry.rank}위 ${entry.dates.join(', ')}(${entry.count}명)`).join(' · ')}`
-    : '아직 등록된 일정이 없어요. 날짜를 직접 골라 주세요.';
+  // 가장 많은 인원이 겹친 1위 후보 날짜만 고를 수 있다.
+  const candidates = topCandidateDates();
+  const dateSelect = $('confirm-date');
+  dateSelect.innerHTML = candidates.dates
+    .map((date) => `<option value="${date}">${formatConfirmOption(date)}</option>`)
+    .join('');
+  if (candidates.dates.includes(eventData.confirmedDate)) dateSelect.value = eventData.confirmedDate;
+  dateSelect.disabled = candidates.dates.length === 0;
+  $('confirm-date-hint').textContent = candidates.dates.length
+    ? `가장 많은 인원(${candidates.count}명)이 겹친 1위 후보 ${candidates.dates.map(formatShortDate).join(', ')} 중에서 고를 수 있어요.`
+    : '아직 등록된 일정이 없어 확정할 수 없어요. 먼저 일정을 등록해 주세요.';
+  // 후보가 없으면(=아무도 일정을 등록하지 않음) 확정 자체가 불가능하다.
+  $('confirm-submit').disabled = !confirmed && candidates.dates.length === 0;
   $('confirm-time').value = eventData.confirmedTime || DEFAULT_MEET_TIME;
   $('confirm-pin').value = '';
   $('confirm-error').textContent = '';
@@ -912,7 +924,7 @@ function renderTeamsPreview() {
   rows.push(previewRow('참여 인원', `${eventData.participants.length}명 / 총원 ${eventData.totalCount}명`));
 
   $('teams-preview').innerHTML = `
-    <p class="teams-preview-title">🍻 ${esc(eventData.title)}</p>
+    <p class="teams-preview-title">🍷 ${esc(eventData.title)}</p>
     <p class="teams-preview-meta">${esc(formatShortDate(eventData.confirmedDate))} ${esc(formatMeetTime(eventData.confirmedTime))}</p>
     ${note ? `<p class="teams-preview-note">${esc(note)}</p>` : ''}
     ${rows.join('')}
@@ -929,6 +941,7 @@ function renderWebhookFields() {
     ['time', eventData.confirmedTime],
     ['poi_name', place ? place.name : ''],
     ['address', place ? place.roadAddress || place.address || '' : ''],
+    ['web_link', location.href],
   ];
   if (place && place.link) fields.push(['url', place.link]);
   $('webhook-fields').innerHTML =
@@ -951,15 +964,23 @@ function shareSummaryParts() {
   return parts;
 }
 
-// Share to Teams 의 compose box 기본 문구. 200자를 넘으면 잘리므로 짧게 만든다.
+// Share to Teams 의 compose box 기본 문구. (마이크로소프트 사양상 200자를 넘으면 잘린다)
+// 공유 버튼은 일정·장소가 모두 확정된 뒤에만 노출되므로 확정 값이 항상 존재한다.
 function buildShareMessage() {
-  return `🍻 ${eventData.title} — ${shareSummaryParts().join(' · ')}`.slice(0, 190);
+  const place = confirmedPlace();
+  return [
+    eventData.title,
+    `모임 날짜/시간   : ${formatShortDate(eventData.confirmedDate)} ${formatMeetTime(eventData.confirmedTime)}`,
+    `모이는 곳        : ${place ? place.name : ''}`,
+    `모임 인원        : 참여 ${eventData.participants.length}명 / 총원 ${eventData.totalCount}명`,
+    `웹에서 자세히보기: ${location.href}`,
+  ].join('\n');
 }
 
 // 채널에 붙는 링크 카드는 서버가 넣어준 OG 태그로 만들어진다. 같은 내용을 화면에서도 보여준다.
 function renderLinkPreview() {
   $('link-preview').innerHTML = `
-    <p class="link-preview-title">🍻 ${esc(eventData.title)}</p>
+    <p class="link-preview-title">🍷 ${esc(eventData.title)}</p>
     <p class="link-preview-desc">${esc(shareSummaryParts().join(' · '))}</p>
     <p class="link-preview-host">${esc(location.host)}</p>`;
 }

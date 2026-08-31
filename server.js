@@ -172,6 +172,18 @@ function nextDate(dateStr) {
   return date.toISOString().slice(0, 10);
 }
 
+// 가장 많은 인원이 겹친 1위 후보 날짜들(yyyy-MM-dd, 동점 포함 오름차순). 일정 확정은 이 중에서만 고를 수 있다.
+function topCandidateDates(event) {
+  const counts = {};
+  for (const participant of event.participants) {
+    for (const date of participant.dates) counts[date] = (counts[date] || 0) + 1;
+  }
+  const dates = Object.keys(counts);
+  if (dates.length === 0) return [];
+  const maxCount = Math.max(...Object.values(counts));
+  return dates.filter((date) => counts[date] === maxCount).sort();
+}
+
 // 공동 1위가 여러 날이면 가장 늦은 후보 다음 날에 만료해 모든 1위 후보를 보존한다.
 function refreshExpireDate(event) {
   const counts = {};
@@ -419,7 +431,7 @@ function buildTeamsCard(event, shareUrl, note) {
   // (검색 URL 폴백은 정확도가 보장되지 않아 채널에 내보내지 않는다)
   const mapUrl = place && place.link ? place.link : '';
   const body = [
-    { type: 'TextBlock', text: `🍻 ${event.title}`, size: 'Large', weight: 'Bolder', wrap: true },
+    { type: 'TextBlock', text: `🍷 ${event.title}`, size: 'Large', weight: 'Bolder', wrap: true },
     {
       type: 'TextBlock',
       text: `${formatCardDate(event.confirmedDate)} ${formatMeetTime(event.confirmedTime)}`,
@@ -475,6 +487,7 @@ function buildWebhookPayload(event, shareUrl, note) {
     time: event.confirmedTime,
     poi_name: place ? place.name : '',
     address: place ? place.roadAddress || place.address || '' : '',
+    web_link: shareUrl,
     // 지도 링크는 사용자가 붙여넣은 값만 보낸다. 없으면 필드 자체를 빼서
     // 워크플로가 검색 URL을 실제 POI 링크로 오해하지 않게 한다.
     ...(link ? { url: link } : {}),
@@ -532,7 +545,7 @@ function buildEventMeta(event, shareUrl) {
     parts.push(dateRanks.length ? `날짜 1위 ${dateRanks[0].dates.join(', ')} (${dateRanks[0].count}명)` : '아직 등록된 일정이 없어요');
   }
   parts.push(`참여 ${event.participants.length}명 / 총원 ${event.totalCount}명`);
-  return { title: `🍻 ${event.title}`, description: parts.join(' · '), url: shareUrl };
+  return { title: `🍷 ${event.title}`, description: parts.join(' · '), url: shareUrl };
 }
 
 function escapeHtmlAttribute(value) {
@@ -654,6 +667,13 @@ async function handleApi(req, res, url) {
       if (!DATE_RE.test(confirmedDate)) return sendJson(res, 400, { error: '만나는 날짜를 선택해 주세요.' });
       if (confirmedDate < event.startDate || confirmedDate > event.endDate) {
         return sendJson(res, 400, { error: '만나는 날짜는 약속의 표시 범위 안에서 골라 주세요.' });
+      }
+      const candidateDates = topCandidateDates(event);
+      if (candidateDates.length === 0) {
+        return sendJson(res, 400, { error: '아직 등록된 일정이 없어 확정할 수 없어요. 먼저 일정을 등록해 주세요.' });
+      }
+      if (!candidateDates.includes(confirmedDate)) {
+        return sendJson(res, 400, { error: '만나는 날짜는 가장 많은 인원이 겹친 1위 후보 날짜 중에서 골라 주세요.' });
       }
       if (!CONFIRM_TIME_RE.test(confirmedTime)) {
         return sendJson(res, 400, { error: '만나는 시간을 HH:MM 형식으로 입력해 주세요.' });

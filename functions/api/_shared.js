@@ -303,6 +303,18 @@ function formatCardRange(dateStr) {
   return `${year}.${month}.${day}`;
 }
 
+// 가장 많은 인원이 겹친 1위 후보 날짜들(yyyy-MM-dd, 동점 포함 오름차순). 일정 확정은 이 중에서만 고를 수 있다.
+export function topCandidateDates(event) {
+  const counts = {};
+  for (const participant of event.participants) {
+    for (const date of participant.dates) counts[date] = (counts[date] || 0) + 1;
+  }
+  const dates = Object.keys(counts);
+  if (dates.length === 0) return [];
+  const maxCount = Math.max(...Object.values(counts));
+  return dates.filter((date) => counts[date] === maxCount).sort();
+}
+
 // 날짜 후보 순위. 동점은 같은 순위로 묶는다. (결과 탭의 '회식 날 후보 순위'와 같은 규칙)
 function topDateRanks(event, limit = 3) {
   const counts = {};
@@ -341,7 +353,7 @@ export function buildTeamsCard(event, shareUrl, note) {
   // (검색 URL 폴백은 정확도가 보장되지 않아 채널에 내보내지 않는다)
   const mapUrl = place && place.link ? place.link : '';
   const body = [
-    { type: 'TextBlock', text: `🍻 ${event.title}`, size: 'Large', weight: 'Bolder', wrap: true },
+    { type: 'TextBlock', text: `🍷 ${event.title}`, size: 'Large', weight: 'Bolder', wrap: true },
     {
       type: 'TextBlock',
       text: `${formatCardDate(event.confirmedDate)} ${formatMeetTime(event.confirmedTime)}`,
@@ -397,6 +409,7 @@ export function buildWebhookPayload(event, shareUrl, note) {
     time: event.confirmedTime,
     poi_name: place ? place.name : '',
     address: place ? place.roadAddress || place.address || '' : '',
+    web_link: shareUrl,
     // 지도 링크는 사용자가 붙여넣은 값만 보낸다. 없으면 필드 자체를 빼서
     // 워크플로가 검색 URL을 실제 POI 링크로 오해하지 않게 한다.
     ...(link ? { url: link } : {}),
@@ -453,13 +466,7 @@ export function buildEventMeta(event, shareUrl) {
     parts.push(dateRanks.length ? `날짜 1위 ${dateRanks[0].dates.join(', ')} (${dateRanks[0].count}명)` : '아직 등록된 일정이 없어요');
   }
   parts.push(`참여 ${event.participants.length}명 / 총원 ${event.totalCount}명`);
-  return { title: `🍻 ${event.title}`, description: parts.join(' · '), url: shareUrl };
-}
-
-// Share to Teams 의 compose box 기본 문구. 200자를 넘으면 잘리므로 짧게 만든다.
-export function buildShareMessage(event) {
-  const meta = buildEventMeta(event, '');
-  return `${meta.title} — ${meta.description}`.slice(0, 190);
+  return { title: `🍷 ${event.title}`, description: parts.join(' · '), url: shareUrl };
 }
 
 function escapeHtmlAttribute(value) {
