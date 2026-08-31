@@ -1147,6 +1147,117 @@ async function submitPlaceConfirm(e) {
   }
 }
 
+// ---- 카카오톡 공유 ----
+// 카카오 JavaScript 키(config.kakaoJsKey)가 있으면 공식 SDK 로 공유 창을 연다.
+// 키가 없거나 SDK 로드에 실패하면 OS 공유 시트(navigator.share) → 클립보드 복사 순으로 폴백한다.
+const KAKAO_SDK_SRC = 'https://t1.kakaocdn.net/kakao_js_sdk/2.7.9/kakao.min.js';
+const KAKAO_SDK_INTEGRITY = 'sha384-JpLApTkB8lPskhVMhT+m5Ln8aHlnS0bsIexhaak0jOhAkMYedQoVghPfSpjNi9K1';
+let kakaoLoadPromise = null;
+
+// OS 공유 시트는 모바일에서만 쓴다. (데스크톱 시트에는 카카오톡이 없는 경우가 많다)
+function isMobileDevice() {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+function loadKakaoSdk() {
+  if (kakaoLoadPromise) return kakaoLoadPromise;
+  kakaoLoadPromise = new Promise((resolve, reject) => {
+    if (!appConfig.kakaoJsKey) {
+      reject(new Error('no-key'));
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = KAKAO_SDK_SRC;
+    script.integrity = KAKAO_SDK_INTEGRITY;
+    script.crossOrigin = 'anonymous';
+    script.onload = () => {
+      try {
+        if (!window.Kakao.isInitialized()) window.Kakao.init(appConfig.kakaoJsKey);
+        resolve(window.Kakao);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    script.onerror = () => reject(new Error('load-failed'));
+    document.head.appendChild(script);
+  });
+  // 실패했으면 다음 시도 때 다시 로드할 수 있게 캐시를 비운다.
+  kakaoLoadPromise.catch(() => (kakaoLoadPromise = null));
+  return kakaoLoadPromise;
+}
+
+async function shareToKakao() {
+  const hint = $('kakao-share-hint');
+  hint.classList.remove('validation-invalid');
+  const message = buildShareMessage();
+
+  // 1순위: 카카오 공식 SDK (친구/채팅방 선택 창)
+  try {
+    const kakao = await loadKakaoSdk();
+    kakao.Share.sendDefault({
+      objectType: 'text',
+      text: message,
+      link: { mobileWebUrl: location.href, webUrl: location.href },
+      buttonTitle: '약속 확인하기',
+    });
+    hint.textContent = '카카오톡 공유 창을 열었어요.';
+    return;
+  } catch {
+    // 아래 폴백으로
+  }
+
+  // 2순위: OS 공유 시트 (모바일 — 카카오톡 선택 가능)
+  if (navigator.share && isMobileDevice()) {
+    try {
+      await navigator.share({ title: eventData.title, text: message });
+      hint.textContent = '공유 창을 열었어요. 목록에서 카카오톡을 선택해 주세요.';
+      return;
+    } catch (error) {
+      if (error.name === 'AbortError') return; // 사용자가 닫음
+    }
+  }
+
+  // 3순위: 문구 복사 (clipboard API 실패 시 execCommand 폴백)
+  if (await copyTextToClipboard(message)) {
+    hint.textContent = '공유 문구를 복사했어요. 카카오톡 채팅방에 붙여넣어 주세요.';
+  } else {
+    hint.textContent = '복사에 실패했어요. 아래 미리보기 내용을 직접 복사해 주세요.';
+    hint.classList.add('validation-invalid');
+  }
+}
+
+async function copyTextToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // 포커스 문제나 비보안 컨텍스트에서는 예전 방식으로 복사한다.
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    let copied = false;
+    try {
+      copied = document.execCommand('copy');
+    } catch {
+      copied = false;
+    }
+    textarea.remove();
+    return copied;
+  }
+}
+
+// 다이얼로그를 열 때 현재 환경에서 어떤 방식으로 공유되는지 안내한다.
+function renderKakaoHint() {
+  const hint = $('kakao-share-hint');
+  hint.classList.remove('validation-invalid');
+  if (appConfig.kakaoJsKey) hint.textContent = '';
+  else if (navigator.share && isMobileDevice()) hint.textContent = '공유 창이 열리면 목록에서 카카오톡을 선택해 주세요.';
+  else hint.textContent = '이 브라우저에서는 공유 문구가 복사돼요. 카카오톡에 붙여넣어 주세요.';
+}
+
 function openTeamsDialog() {
   const storedWebhook = readStoredWebhook();
   $('teams-webhook').value = storedWebhook;
@@ -1158,6 +1269,7 @@ function openTeamsDialog() {
   renderLinkPreview();
   renderTeamsPreview();
   renderShareLauncher();
+  renderKakaoHint();
   $('teams-dialog').showModal();
 }
 
@@ -1294,6 +1406,7 @@ async function init() {
   });
   $('teams-dialog-form').addEventListener('submit', submitTeamsExport);
   $('teams-dialog-close').addEventListener('click', () => $('teams-dialog').close());
+  $('kakao-share-btn').addEventListener('click', shareToKakao);
   $('teams-webhook-clear').addEventListener('click', () => {
     storeWebhook(null);
     $('teams-webhook').value = '';

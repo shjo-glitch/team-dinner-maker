@@ -309,6 +309,13 @@ input:focus-visible { border-color: var(--accent); background: #fffefa; box-shad
 .toggle-btn.on { color: #fff; border-color: #2f9e63; background: #3cb371; box-shadow: 2px 2px 0 #bfe0cd; }
 .toggle-btn.on:hover { background: #34a065; transform: translate(-1px, -1px); box-shadow: 3px 3px 0 #bfe0cd; }
 
+/* 카카오톡 공유 버튼 (브랜드 노랑 #FEE500 + 검정 텍스트) */
+.kakao-share-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 20px; color: #191919; border: 1px solid #e3cc00; border-radius: 6px; background: #fee500; cursor: pointer; font-size: 13px; font-weight: 700; line-height: 1; transition: background 150ms ease, transform 150ms ease; }
+.kakao-share-btn:hover { background: #fada0a; transform: translateY(-1px); }
+.kakao-share-btn:active { transform: translateY(0); }
+.kakao-share-btn:focus-visible { outline: 3px solid rgba(227, 204, 0, 0.55); outline-offset: 2px; }
+.kakao-share-btn svg { width: 17px; height: 17px; }
+
 /* 팀즈 공유 버튼 (외부 공유 아이콘 + 라벨) */
 .share-btn { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 6px; padding: 8px 17px; color: #4a79d9; border: 1px solid #ccdaf6; border-radius: 8px; background: #e8effc; cursor: pointer; font-size: 12px; font-weight: 700; line-height: 1; transition: background 150ms ease, border-color 150ms ease, transform 150ms ease; }
 .share-btn:hover { border-color: #a9c2ef; background: #dbe8fa; transform: translateY(-1px); }

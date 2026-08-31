@@ -22,6 +22,7 @@ function loadEnvFile(fileName) {
 }
 loadEnvFile('NAVER.env');
 loadEnvFile('HUDY.env');
+loadEnvFile('KAKAO.env');
 
 const PORT = process.env.PORT || 8788;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -905,6 +906,8 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, {
       naverMapKeyId: process.env.NAVER_MAP_KEY_ID || '',
       placeSearchEnabled: Boolean(process.env.NAVER_SEARCH_KEY_ID && process.env.NAVER_SEARCH_KEY),
+      // 카카오 JavaScript 키. 브라우저 노출용이며 카카오 콘솔의 도메인 등록으로 보호된다.
+      kakaoJsKey: process.env.KAKAO_JS_KEY || '',
     });
   }
 
