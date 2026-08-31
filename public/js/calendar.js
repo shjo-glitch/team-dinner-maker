@@ -107,7 +107,7 @@ class Calendar {
     for (let d = 1; d <= daysInMonth; d++) {
       const dow = (firstDow + d - 1) % 7;
       const dateStr = calFmt(y, m, d);
-      const holiday = KR_HOLIDAYS[dateStr];
+      const holiday = getHoliday(dateStr);
       const selectable = this.isSelectable(dateStr, dow);
 
       const classes = ['cal-cell', `dow-${dow}`];

@@ -1,5 +1,5 @@
 // POST /api/events - 새 약속 생성 (Cloudflare Pages Functions + D1)
-import { DATE_RE, MANAGE_PIN_RE, THEMES, createManagePinSalt, hashManagePin, readJson } from '../_shared.js';
+import { DATE_RE, MANAGE_PIN_RE, THEMES, createManagePinSalt, fetchHolidaysForRange, hashManagePin, readJson } from '../_shared.js';
 
 export async function onRequestPost({ request, env }) {
   const { body, error } = await readJson(request);
@@ -51,6 +51,8 @@ export async function onRequestPost({ request, env }) {
     createdAt: new Date().toISOString(),
     participants: [],
     places: [],
+    // 표시 범위의 공휴일. 조회 실패면 null 로 두고 클라이언트가 내장 데이터로 폴백한다.
+    holidays: await fetchHolidaysForRange(startDate, endDate, env.HUDY_API_KEY),
   };
   await env.DB.prepare('INSERT INTO events (id, data) VALUES (?1, ?2)').bind(id, JSON.stringify(event)).run();
   return Response.json({ id });

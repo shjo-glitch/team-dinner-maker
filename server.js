@@ -21,6 +21,7 @@ function loadEnvFile(fileName) {
   }
 }
 loadEnvFile('NAVER.env');
+loadEnvFile('HUDY.env');
 
 const PORT = process.env.PORT || 8788;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -127,7 +128,7 @@ function hashManagePin(pin, salt) {
 function publicEvent(event) {
   const { managePinHash, managePinSalt, deleteAuthFailures, ...publicData } = event;
   // 확정/장소 기능 이전에 만들어진 약속도 같은 모양으로 응답한다.
-  return { confirmedAt: null, confirmedDate: null, confirmedTime: null, confirmedPlaceId: null, places: [], ...publicData };
+  return { confirmedAt: null, confirmedDate: null, confirmedTime: null, confirmedPlaceId: null, places: [], holidays: null, ...publicData };
 }
 
 // 관리 비밀번호 검증. 통과하면 null, 실패하면 { status, body } 를 돌려주고 실패 횟수를 저장한다.
@@ -198,6 +199,38 @@ function refreshExpireDate(event) {
   const maxCount = Math.max(...Object.values(counts));
   const latestTopDate = rankedDates.filter((date) => counts[date] === maxCount).sort().at(-1);
   event.expireDate = nextDate(latestTopDate);
+}
+
+// ---- 공휴일 조회 (hudy.co.kr) ----
+// 약속 생성 시 표시 범위가 걸치는 모든 연도를 조회해 범위 안의 공휴일만 이벤트에 기입한다.
+// 실패하면 null 을 반환하고, 클라이언트는 내장 KR_HOLIDAYS 로 폴백한다. (무료 플랜: 월 100콜)
+const HOLIDAY_API_ENDPOINT = 'https://api.hudy.co.kr/v2/holidays';
+
+async function fetchHolidaysForRange(startDate, endDate, apiKey) {
+  if (!apiKey) return null;
+  const holidays = {};
+  try {
+    for (let year = Number(startDate.slice(0, 4)); year <= Number(endDate.slice(0, 4)); year++) {
+      const response = await fetch(`${HOLIDAY_API_ENDPOINT}?year=${year}`, {
+        headers: { 'x-api-key': apiKey },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok) {
+        console.error(`[holidays] hudy 응답 ${response.status} (year=${year})`);
+        return null;
+      }
+      const payload = await response.json().catch(() => null);
+      if (!payload || payload.result !== true || !Array.isArray(payload.data)) return null;
+      for (const holiday of payload.data) {
+        const date = String(holiday.date || '');
+        if (date >= startDate && date <= endDate) holidays[date] = String(holiday.name || '').slice(0, 20);
+      }
+    }
+    return holidays;
+  } catch (error) {
+    console.error(`[holidays] hudy 조회 실패: ${error.message}`);
+    return null;
+  }
 }
 
 // ---- 진행 단계 ----
@@ -594,6 +627,8 @@ async function handleApi(req, res, url) {
       createdAt: new Date().toISOString(),
       participants: [],
       places: [],
+      // 표시 범위의 공휴일. 조회 실패면 null 로 두고 클라이언트가 내장 데이터로 폴백한다.
+      holidays: await fetchHolidaysForRange(String(body.startDate), String(body.endDate), process.env.HUDY_API_KEY),
     };
     saveEvent(event);
     return sendJson(res, 200, { id });

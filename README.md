@@ -24,7 +24,7 @@
 | 드래그 범위 선택 | 달력에서 시작일을 누른 채 드래그하면 **시작일~끝일 사이의 모든 날짜**가 한 번에 선택됩니다. 드래그 중 화면 가장자리로 가면 자동 스크롤되어 **달 경계를 넘어 연속으로** 선택할 수 있습니다. |
 | 표시 범위 지정 | 약속을 만들 때 달력 범위를 **이번달(오늘~말일) / 다음달(1일~말일) / 특정 날짜까지(오늘~지정일)** 중에서 지정합니다. |
 | 약속 테마 | **평일 약속 / 주말 약속 / 평일+주말** 중 선택. 평일 약속이면 주말이, 주말 약속이면 평일이 자동으로 선택 불가 처리됩니다. |
-| 공휴일 표시 | 대한민국 법정 공휴일(대체공휴일 포함)이 달력의 날짜 아래에 텍스트로 표시됩니다. (예: 10/3 - 개천절) |
+| 공휴일 표시 | 약속을 만들 때 [hudy.co.kr](https://www.hudy.co.kr) **공휴일 API로 표시 범위가 걸치는 연도를 조회해 약속에 기입**하고, 달력 날짜 아래에 표시합니다. (예: 10/3 - 개천절) API 실패 시엔 내장 데이터(2025~2027)로 폴백합니다. |
 | 겹침 농도 뱃지 | 날짜별로 가능한 인원이 많을수록 와인 레드 `#9C3024` 뱃지가 진해집니다. **1명이 선택할 때마다 알파값이 (1/참여자 수)씩** 더해져 전원이 겹친 날은 완전히 진하게 표시됩니다. |
 | 최다 겹침 강조 | 가장 많은 인원이 겹친 날(공동 1등 포함)은 딥 골드 테두리의 골드 링과 4방향 스파클로 강조됩니다. 스파클은 우상단·좌하단 순서로 반복 재생됩니다. |
 | 회식 날 후보 순위 | 결과 탭 상단에서 가능 인원이 많은 순으로 1~3위 후보를 보여줍니다. 동점 날짜는 같은 순위에 묶어 `1위: 1/1, 1/2` 형식으로 표시합니다. |
@@ -306,8 +306,13 @@ Microsoft Graph로 채널에 글을 쓰려면 위임 권한 `ChannelMessage.Send
 
 ![공휴일 표시](images/05-holidays.png)
 
-공휴일 데이터는 `public/js/holidays.js`에 2025~2027년이 등록되어 있습니다.
-연도가 지나면 같은 형식(`'YYYY-MM-DD': '이름'`)으로 추가해 주세요.
+공휴일은 **약속을 만들 때** [hudy.co.kr](https://www.hudy.co.kr) 공휴일 API(`GET /v2/holidays?year=`)로
+표시 범위가 걸치는 **모든 연도를 조회해 약속 데이터에 기입**합니다. 연도를 걸치는 범위(예: 12월~1월)면 두 해를 모두 조회합니다.
+조회가 실패하거나 키가 없으면 약속에는 `holidays: null` 로 저장되고, 화면은 내장 데이터(`public/js/holidays.js`, 2025~2027)로 폴백합니다.
+
+- API 키는 `HUDY.env`(로컬) / `.dev.vars`(wrangler dev) / Pages 시크릿 `HUDY_API_KEY`(배포)에 둡니다. 모두 git에 커밋되지 않습니다.
+- 서버에서만 호출하며 키는 클라이언트로 나가지 않습니다. **무료 플랜은 월 100콜**(약속 생성 1회당 1~2콜)이니 초과 시 폴백으로 동작합니다.
+- 내장 폴백 데이터는 연도가 지나면 같은 형식(`'YYYY-MM-DD': '이름'`)으로 추가해 주세요.
 
 ## 6. 일정 확정하고 장소 정하기
 
@@ -417,7 +422,7 @@ Microsoft Graph로 채널에 글을 쓰려면 위임 권한 `ChannelMessage.Send
 │   ├── _redirects           #   /m/* → 약속 페이지 rewrite (Cloudflare Pages)
 │   ├── css/style.css
 │   └── js/
-│       ├── holidays.js      #   대한민국 법정 공휴일 데이터 (2025~2027)
+│       ├── holidays.js      #   공휴일 폴백 데이터(2025~2027) + 활성 공휴일 전환(getHoliday)
 │       ├── calendar.js      #   달력 컴포넌트 (드래그 범위 선택, 테마 제한, 결과 뱃지)
 │       ├── place-map.js     #   네이버 지도 로더 + 후보지 핀 렌더러
 │       ├── index.js
@@ -435,6 +440,7 @@ Microsoft Graph로 채널에 글을 쓰려면 위임 권한 `ChannelMessage.Send
 │   └── expiry-scheduler.js  # 만료된 약속을 D1에서 지우는 Cron Worker
 ├── server.js                # 로컬 실행용 무의존성 서버 (.data/에 JSON 파일 저장)
 ├── NAVER.env                # 네이버 API 키 (git 제외) — 로컬 server.js 가 읽음
+├── HUDY.env                 # hudy 공휴일 API 키 (git 제외) — 로컬 server.js 가 읽음
 ├── .dev.vars                # 네이버 API 키 (git 제외) — wrangler pages dev 가 읽음
 ├── wrangler.toml            # Cloudflare Pages 설정 (D1 바인딩: DB)
 └── wrangler.expiry.toml     # 만료 정리 Worker 설정 (Cron Trigger: 매일 15:00 UTC)
@@ -460,7 +466,7 @@ UI를 수정했으면 이 스크립트를 다시 돌려 캡처를 맞춰 주세�
 
 | 메서드 | 경로 | 설명 |
 | --- | --- | --- |
-| `POST` | `/api/events` | 약속 생성 `{title, totalCount, theme, startDate, endDate, managePin}` → `{id}` |
+| `POST` | `/api/events` | 약속 생성 `{title, totalCount, theme, startDate, endDate, managePin}` → `{id}`. 생성 시 표시 범위의 공휴일을 hudy API로 조회해 `holidays` 로 기입(실패 시 `null`) |
 | `GET` | `/api/events/:id` | 약속 조회 (참여자 포함) |
 | `PUT` | `/api/events/:id/participants` | 참여자 일정 등록/수정 `{name, dates: ["YYYY-MM-DD", ...]}` — 신규 참여자는 총원을 초과하면 `400`으로 거부 |
 | `DELETE` | `/api/events/:id/participants?name=이름` | 참여자 삭제 |

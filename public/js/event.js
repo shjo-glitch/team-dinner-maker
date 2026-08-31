@@ -257,7 +257,7 @@ function showDateDetail(dateStr) {
   const dow = DOW_LABELS[new Date(y, m - 1, d).getDay()];
   const ok = eventData.participants.filter((p) => p.dates.includes(dateStr));
   const no = eventData.participants.filter((p) => !p.dates.includes(dateStr));
-  const holiday = KR_HOLIDAYS[dateStr];
+  const holiday = getHoliday(dateStr);
 
   $('date-detail').hidden = false;
   $('detail-title').textContent = `${m}월 ${d}일 (${dow})${holiday ? ' · ' + holiday : ''}`;
@@ -1170,6 +1170,8 @@ async function init() {
     return;
   }
   $('app').hidden = false;
+  // 약속 생성 시 조회해 둔 공휴일이 있으면 내장 목록 대신 사용한다.
+  setActiveHolidays(eventData.holidays);
   activeVoterName = readStoredVoter();
 
   document.title = `${eventData.title} - 회식 날짜 잡기`;

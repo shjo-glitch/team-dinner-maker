@@ -1,5 +1,16 @@
 // 대한민국 법정 공휴일 (2025 ~ 2027, 대체공휴일 포함)
-// 달력의 해당 날짜 아래에 이름이 표시된다. 연도가 지나면 이 목록에 추가해 주면 된다.
+// 기본값은 아래 내장 목록이고, 약속에 공휴일 API(hudy.co.kr) 조회 결과가 기입되어 있으면
+// setActiveHolidays() 로 그 데이터가 우선 사용된다. 내장 목록은 API 실패 시 폴백이다.
+let ACTIVE_HOLIDAYS = null;
+
+function setActiveHolidays(map) {
+  ACTIVE_HOLIDAYS = map && typeof map === 'object' ? map : null;
+}
+
+function getHoliday(dateStr) {
+  return (ACTIVE_HOLIDAYS || KR_HOLIDAYS)[dateStr];
+}
+
 const KR_HOLIDAYS = {
   // 2025
   '2025-01-01': '신정',
