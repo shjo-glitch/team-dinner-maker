@@ -1,5 +1,5 @@
 // POST   /api/events/:id/confirm - 일정 확정 (날짜 + 만나는 시간 지정, 장소 정하기 단계 열기)
-// DELETE /api/events/:id/confirm - 일정 확정 취소. 장소 확정도 함께 풀린다.
+// DELETE /api/events/:id/confirm - 일정 확정 취소. (장소 확정은 독립이라 유지된다)
 import { CONFIRM_TIME_RE, DATE_RE, checkManagePin, loadEvent, publicEvent, readJson, saveEvent, topCandidateDates } from '../../_shared.js';
 
 export async function onRequestPost({ request, params, env }) {
@@ -53,9 +53,8 @@ export async function onRequestDelete({ request, params, env }) {
   if (denied) return denied;
 
   // 날짜·시간은 남겨 두어 다시 확정할 때 이전 값이 채워지게 한다.
-  // 장소 확정은 일정이 풀리면 함께 풀린다.
+  // 장소 확정은 독립이므로 함께 풀지 않는다.
   event.confirmedAt = null;
-  event.confirmedPlaceId = null;
   await saveEvent(env, event);
   return Response.json(publicEvent(event));
 }

@@ -722,9 +722,8 @@ async function handleApi(req, res, url) {
       event.confirmedTime = confirmedTime;
     } else {
       // 날짜·시간은 남겨 두어 다시 확정할 때 이전 값이 채워지게 한다.
-      // 장소 확정은 일정이 풀리면 함께 풀린다.
+      // 장소 확정은 독립이므로 함께 풀지 않는다.
       event.confirmedAt = null;
-      event.confirmedPlaceId = null;
     }
     saveEvent(event);
     return sendJson(res, 200, publicEvent(event));
@@ -745,7 +744,6 @@ async function handleApi(req, res, url) {
       return sendJson(res, 200, publicEvent(event));
     }
 
-    if (!isScheduleConfirmed(event)) return sendJson(res, 409, { error: '일정을 먼저 확정해 주세요.' });
     const place = (event.places || []).find((candidate) => candidate.id === String(body.placeId || ''));
     if (!place) return sendJson(res, 404, { error: '후보 장소를 찾을 수 없습니다.' });
 
@@ -772,7 +770,7 @@ async function handleApi(req, res, url) {
   if (['POST', 'PUT', 'DELETE'].includes(req.method) && parts.length === 4 && parts[1] === 'events' && parts[3] === 'places') {
     const event = loadEvent(parts[2]);
     if (!event) return sendJson(res, 404, { error: '약속을 찾을 수 없습니다.' });
-    if (!isScheduleConfirmed(event)) return sendJson(res, 409, { error: '일정을 먼저 확정해 주세요.' });
+    // 장소 정하기는 일정 확정과 병행할 수 있다. (공유만 둘 다 확정된 뒤 가능)
     if (!Array.isArray(event.places)) event.places = [];
 
     if (req.method === 'POST') {

@@ -44,10 +44,9 @@ function isFullyConfirmed() {
 }
 
 // 1단계(만들기)는 이 페이지에 들어온 시점에 이미 끝나 있다.
+// 2단계(일정 & 장소 정하기)는 일정·장소 확정을 병행하고, 둘 다 끝나면 3단계(공유하기).
 function currentStep() {
-  if (isFullyConfirmed()) return 4;
-  if (isScheduleConfirmed()) return 3;
-  return 2;
+  return isFullyConfirmed() ? 3 : 2;
 }
 
 function renderSteps() {
@@ -384,41 +383,51 @@ function formatLockRemaining(lockedUntil) {
   return `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`;
 }
 
-// 파기·확정이 같은 관리 비밀번호 잠금을 공유하므로 두 버튼을 함께 잠근다.
+// 확정 스위치의 상태(ON/OFF)와 라벨을 함께 갱신한다.
+function setSwitchState(button, on, label) {
+  button.classList.toggle('on', on);
+  button.setAttribute('aria-pressed', String(on));
+  button.querySelector('.switch-label').textContent = label;
+}
+
+// 파기·확정이 같은 관리 비밀번호 잠금을 공유하므로 버튼들을 함께 잠근다.
 function syncManageLockState() {
   clearTimeout(cancelButtonTimer);
   const cancelButton = $('cancel-event');
-  const confirmEventButton = $('confirm-event');
+  const scheduleSwitch = $('confirm-event');
+  const placeSwitch = $('confirm-place-toggle');
   const lockedUntil = eventData.deleteLockedUntil;
   const isLocked = lockedUntil && new Date(lockedUntil).getTime() > Date.now();
-  const confirmed = Boolean(eventData.confirmedAt);
 
-  for (const [button, label] of [
-    [cancelButton, '약속 파기하기'],
-    [confirmEventButton, confirmed ? '↩︎ 확정 취소하기' : '📍 일정 확정하기'],
-  ]) {
-    if (isLocked) {
-      button.disabled = true;
-      button.textContent = `${formatLockRemaining(lockedUntil)} 후 재시도`;
-      button.title = '관리 비밀번호를 5회 틀려 3분 동안 관리 기능이 잠겼어요.';
-    } else {
-      button.disabled = false;
-      button.textContent = label;
-      button.removeAttribute('title');
-    }
+  if (isLocked) {
+    const remaining = `${formatLockRemaining(lockedUntil)} 후 재시도`;
+    cancelButton.disabled = true;
+    cancelButton.textContent = remaining;
+    setSwitchState(scheduleSwitch, isScheduleConfirmed(), remaining);
+    setSwitchState(placeSwitch, Boolean(confirmedPlace()), remaining);
+  } else {
+    cancelButton.disabled = false;
+    cancelButton.textContent = '약속 파기하기';
+    // 스위치 ON = 확정됨(누르면 다시 정하기), OFF = 미확정(누르면 확정하기)
+    setSwitchState(scheduleSwitch, isScheduleConfirmed(), isScheduleConfirmed() ? '일정 다시 정하기' : '일정 확정하기');
+    setSwitchState(placeSwitch, Boolean(confirmedPlace()), confirmedPlace() ? '장소 다시 정하기' : '장소 확정하기');
   }
+  scheduleSwitch.disabled = isLocked;
+  placeSwitch.disabled = isLocked;
 
-  for (const id of ['cancel-confirm', 'cancel-pin', 'confirm-submit', 'confirm-pin']) $(id).disabled = isLocked;
+  for (const id of ['cancel-confirm', 'cancel-pin', 'confirm-submit', 'confirm-pin', 'place-dialog-submit', 'place-confirm-pin']) {
+    $(id).disabled = isLocked;
+  }
   if (isLocked) cancelButtonTimer = setTimeout(syncManageLockState, 1000);
 }
 
 // 확정 여부에 따라 '어디서 볼까?' 탭을 열고 닫는다.
 function syncConfirmState() {
-  const confirmed = isScheduleConfirmed();
-  $('tab-place').hidden = !confirmed;
+  // 장소 정하기는 일정 확정과 병행하므로 '어디서 볼까?' 탭은 항상 열려 있다.
+  $('tab-place').hidden = false;
   renderHead();
   renderSteps();
-  if (!confirmed && !$('panel-place').hidden) switchTab('vote');
+  syncManageLockState();
 }
 
 function openCancelDialog() {
@@ -584,7 +593,7 @@ function renderPlaceList() {
             <button type="button" class="place-confirm-btn${isConfirmed ? ' confirmed' : ''}" data-place-confirm="${esc(place.id)}">
               ${isConfirmed ? '✓ 확정된 장소 · 다시 누르면 확정 취소' : '이 곳으로 확정하기'}
             </button>
-            ${isConfirmed ? `
+            ${isConfirmed && isScheduleConfirmed() ? `
             <button type="button" class="share-btn" data-share title="확정된 일정을 팀즈로 공유">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M19 13v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" />
@@ -799,11 +808,11 @@ function formatConfirmOption(dateStr) {
 
 function openConfirmDialog() {
   const confirmed = Boolean(eventData.confirmedAt);
-  $('confirm-dialog-title').textContent = confirmed ? '확정을 취소할까요?' : '일정을 확정할까요?';
+  $('confirm-dialog-title').textContent = confirmed ? '일정을 다시 정할까요?' : '일정을 확정할까요?';
   $('confirm-dialog-copy').textContent = confirmed
-    ? "'어디서 볼까?' 탭이 닫혀요. 등록된 후보지와 투표, 만나는 시간은 지워지지 않고 다시 확정하면 그대로 돌아와요."
-    : "만나는 시간을 정하면 '어디서 볼까?' 탭이 열려서 참여자들이 만날 장소를 등록하고 투표할 수 있어요. 날짜는 그대로 계속 수정할 수 있어요.";
-  $('confirm-submit').textContent = confirmed ? '확정 취소하기' : '확정하기';
+    ? '일정 확정을 풀어요. 장소 확정과 후보지·투표·만나는 시간 값은 그대로 남고, 다시 확정하면 이전 값이 채워져요.'
+    : '만나는 날짜와 시간을 확정해요. 장소 정하기는 확정 전에도 어디서 볼까? 탭에서 병행할 수 있어요.';
+  $('confirm-submit').textContent = confirmed ? '확정 풀기' : '확정하기';
   // 확정 취소에는 시간이 필요 없다.
   $('confirm-time-field').hidden = confirmed;
   $('confirm-date-field').hidden = confirmed;
@@ -876,6 +885,8 @@ async function submitConfirm(e) {
     $('confirm-dialog').close();
     syncManageLockState();
     syncConfirmState();
+    // 공유 버튼은 일정+장소가 모두 확정됐을 때만 나오므로 후보 목록도 다시 그린다.
+    renderPlaceList();
     if (isScheduleConfirmed()) switchTab('place');
   } catch (err) {
     errorEl.textContent = err.message;
@@ -1043,22 +1054,53 @@ function storeWebhook(url) {
 
 let pendingPlaceId = null;
 
+// placeId 를 주면 그 후보를 확정하는 모드(카드 버튼), 없으면 득표순 선택 모드(상단 스위치).
 function openPlaceDialog(placeId) {
-  const place = (eventData.places || []).find((candidate) => candidate.id === placeId);
-  if (!place) return;
-  const isConfirmed = place.id === eventData.confirmedPlaceId;
-  pendingPlaceId = placeId;
-  $('place-dialog-title').textContent = isConfirmed ? '장소 확정을 취소할까요?' : '이 곳으로 확정할까요?';
+  const pickField = $('place-dialog-pick-field');
+  const isPickMode = !placeId;
+  let place = null;
+
+  if (isPickMode) {
+    const places = rankedPlaces();
+    if (places.length === 0) {
+      switchTab('place');
+      $('place-error').textContent = '후보지를 먼저 등록해 주세요.';
+      $('place-query').focus();
+      return;
+    }
+    pickField.hidden = false;
+    $('place-confirm-pick').innerHTML = places
+      .map((candidate) => `<option value="${esc(candidate.id)}">${esc(candidate.name)} · ${(candidate.votes || []).length}표</option>`)
+      .join('');
+    place = places[0];
+    pendingPlaceId = place.id;
+  } else {
+    place = (eventData.places || []).find((candidate) => candidate.id === placeId);
+    if (!place) return;
+    pickField.hidden = true;
+    pendingPlaceId = placeId;
+  }
+
+  const isConfirmed = !isPickMode && place.id === eventData.confirmedPlaceId;
+  $('place-dialog-title').textContent = isConfirmed ? '장소를 다시 정할까요?' : '이 곳으로 확정할까요?';
   $('place-dialog-copy').textContent = isConfirmed
-    ? `'${place.name}' 확정을 취소하면 팀즈로 공유할 수 없게 돼요. 후보지와 투표는 그대로 남습니다.`
-    : `'${place.name}'을(를) 최종 장소로 확정하면 팀즈로 공유할 수 있게 돼요.`;
-  $('place-dialog-submit').textContent = isConfirmed ? '확정 취소하기' : '장소 확정하기';
+    ? `'${place.name}' 확정을 풀면 팀즈로 공유할 수 없게 돼요. 후보지와 투표는 그대로 남습니다.`
+    : isPickMode
+      ? '최종 장소를 고르고 확정하면 일정 확정과 함께 공유 단계가 열려요.'
+      : `'${place.name}'을(를) 최종 장소로 확정하면 공유 단계가 열려요.`;
+  $('place-dialog-submit').textContent = isConfirmed ? '확정 풀기' : '장소 확정하기';
   $('place-dialog-link-field').hidden = isConfirmed;
   $('place-confirm-link').value = place.link || '';
   $('place-confirm-pin').value = '';
   $('place-dialog-error').textContent = '';
   $('place-dialog').showModal();
   $('place-confirm-pin').focus();
+}
+
+// 상단 '장소 확정하기' 스위치: OFF→확정 다이얼로그(후보 선택), ON→확정 풀기 다이얼로그
+function togglePlaceConfirm() {
+  const confirmed = confirmedPlace();
+  openPlaceDialog(confirmed ? confirmed.id : null);
 }
 
 async function submitPlaceConfirm(e) {
@@ -1319,6 +1361,12 @@ async function init() {
 
   $('place-dialog-form').addEventListener('submit', submitPlaceConfirm);
   $('place-dialog-close').addEventListener('click', () => $('place-dialog').close());
+  $('confirm-place-toggle').addEventListener('click', togglePlaceConfirm);
+  $('place-confirm-pick').addEventListener('change', (e) => {
+    pendingPlaceId = e.target.value;
+    const picked = (eventData.places || []).find((candidate) => candidate.id === pendingPlaceId);
+    $('place-confirm-link').value = picked && picked.link ? picked.link : '';
+  });
 
   $('cancel-event').addEventListener('click', openCancelDialog);
   $('cancel-dialog-form').addEventListener('submit', cancelEvent);

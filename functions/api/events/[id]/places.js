@@ -1,23 +1,20 @@
 // POST   /api/events/:id/places                  - 후보 장소 등록
 // PUT    /api/events/:id/places                  - 후보 장소 투표 토글
 // DELETE /api/events/:id/places?placeId=...       - 후보 장소 삭제
-import { MAX_PLACES, isSamePlace, isScheduleConfirmed, loadEvent, publicEvent, readJson, saveEvent, validatePlaceInput } from '../../_shared.js';
+import { MAX_PLACES, isSamePlace, loadEvent, publicEvent, readJson, saveEvent, validatePlaceInput } from '../../_shared.js';
 
-// 확정된 약속만 후보 장소를 다룰 수 있다.
-async function loadConfirmedEvent(env, id) {
+// 장소 정하기는 일정 확정과 병행할 수 있다. (공유만 둘 다 확정된 뒤 가능)
+async function loadPlaceEvent(env, id) {
   const event = await loadEvent(env, id);
   if (!event) {
     return { error: Response.json({ error: '약속을 찾을 수 없습니다.' }, { status: 404 }) };
-  }
-  if (!isScheduleConfirmed(event)) {
-    return { error: Response.json({ error: '일정을 먼저 확정해 주세요.' }, { status: 409 }) };
   }
   if (!Array.isArray(event.places)) event.places = [];
   return { event };
 }
 
 export async function onRequestPost({ request, params, env }) {
-  const { event, error } = await loadConfirmedEvent(env, params.id);
+  const { event, error } = await loadPlaceEvent(env, params.id);
   if (error) return error;
 
   const parsed = await readJson(request);
@@ -43,7 +40,7 @@ export async function onRequestPost({ request, params, env }) {
 }
 
 export async function onRequestPut({ request, params, env }) {
-  const { event, error } = await loadConfirmedEvent(env, params.id);
+  const { event, error } = await loadPlaceEvent(env, params.id);
   if (error) return error;
 
   const parsed = await readJson(request);
@@ -68,7 +65,7 @@ export async function onRequestPut({ request, params, env }) {
 }
 
 export async function onRequestDelete({ request, params, env }) {
-  const { event, error } = await loadConfirmedEvent(env, params.id);
+  const { event, error } = await loadPlaceEvent(env, params.id);
   if (error) return error;
 
   const placeId = String(new URL(request.url).searchParams.get('placeId') || '');

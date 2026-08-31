@@ -26,13 +26,19 @@
         </div>
         <ol class="steps" id="steps" aria-label="진행 단계">
           <li data-step="1"><b>1</b>일정 만들기</li>
-          <li data-step="2"><b>2</b>일정 투표</li>
-          <li data-step="3"><b>3</b>일정·장소 정하기</li>
-          <li data-step="4"><b>4</b>공유하기</li>
+          <li data-step="2"><b>2</b>일정 &amp; 장소 정하기</li>
+          <li data-step="3"><b>3</b>공유하기</li>
         </ol>
         <div class="toolbar">
           <button type="button" class="btn ghost small" id="copy-link">🔗 참여 링크 복사</button>
-          <button type="button" class="btn ghost small" id="confirm-event">📍 일정 확정하기</button>
+          <button type="button" class="switch-btn" id="confirm-event" aria-pressed="false">
+            <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+            <span class="switch-label">일정 확정하기</span>
+          </button>
+          <button type="button" class="switch-btn" id="confirm-place-toggle" aria-pressed="false">
+            <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+            <span class="switch-label">장소 확정하기</span>
+          </button>
           <button type="button" class="btn ghost danger small" id="cancel-event">약속 파기하기</button>
         </div>
       </div>
@@ -177,6 +183,11 @@
         <p class="section-kicker">FINAL VENUE</p>
         <h2 id="place-dialog-title">이 곳으로 확정할까요?</h2>
         <p class="cancel-dialog-copy" id="place-dialog-copy"></p>
+        <div class="field" id="place-dialog-pick-field" hidden>
+          <label for="place-confirm-pick">어느 곳으로 확정할까요?</label>
+          <select id="place-confirm-pick"></select>
+          <p class="hint">득표순이에요. 후보 카드의 '이 곳으로 확정하기'로도 지정할 수 있어요.</p>
+        </div>
         <div class="field" id="place-dialog-link-field">
           <label for="place-confirm-link">네이버 지도 링크 (선택)</label>
           <input type="url" id="place-confirm-link" placeholder="https://naver.me/..." maxlength="300" autocomplete="off" spellcheck="false" />
