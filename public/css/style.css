@@ -302,15 +302,12 @@ input:focus-visible { border-color: var(--accent); background: #fffefa; box-shad
 .place-card-footer .place-confirm-btn { min-width: 0; flex: 1; margin-top: 0; }
 
 /* 확정 토글 버튼: OFF = 비활성(disabled) 느낌, ON = 초록으로 채워진 활성(enabled) 상태 */
-.toggle-btn { display: inline-flex; align-items: center; gap: 7px; min-height: 38px; padding: 8px 14px 8px 11px; color: #a89c8f; border: 1px solid #ddd3c6; border-radius: 3px; background: #f0eadf; cursor: pointer; font-size: 12px; font-weight: 700; box-shadow: none; transition: color 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease; }
+.toggle-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 8px 15px; color: #a89c8f; border: 1px solid #ddd3c6; border-radius: 3px; background: #f0eadf; cursor: pointer; font-size: 12px; font-weight: 700; box-shadow: none; transition: color 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease; }
 .toggle-btn:hover { color: var(--ink-soft); border-color: #c3b5a3; background: var(--surface-warm); }
 .toggle-btn:focus-visible { outline: 3px solid rgba(156, 48, 36, 0.35); outline-offset: 3px; }
 .toggle-btn:disabled { cursor: not-allowed; opacity: 0.55; }
-.toggle-mark { display: grid; width: 15px; height: 15px; flex: 0 0 auto; place-items: center; border: 1.5px solid #c8bcb0; border-radius: 50%; background: transparent; color: transparent; font-size: 9px; font-weight: 700; line-height: 1; transition: background 160ms ease, border-color 160ms ease, color 160ms ease; }
-.toggle-mark::before { content: '✓'; }
 .toggle-btn.on { color: #fff; border-color: #2f9e63; background: #3cb371; box-shadow: 2px 2px 0 #bfe0cd; }
 .toggle-btn.on:hover { background: #34a065; transform: translate(-1px, -1px); box-shadow: 3px 3px 0 #bfe0cd; }
-.toggle-btn.on .toggle-mark { color: #3cb371; border-color: #fff; background: #fff; }
 
 /* 팀즈 공유 버튼 (외부 공유 아이콘 + 라벨) */
 .share-btn { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 6px; padding: 8px 17px; color: #4a79d9; border: 1px solid #ccdaf6; border-radius: 8px; background: #e8effc; cursor: pointer; font-size: 12px; font-weight: 700; line-height: 1; transition: background 150ms ease, border-color 150ms ease, transform 150ms ease; }
