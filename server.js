@@ -201,36 +201,86 @@ function refreshExpireDate(event) {
   event.expireDate = nextDate(latestTopDate);
 }
 
-// ---- 공휴일 조회 (hudy.co.kr) ----
-// 약속 생성 시 표시 범위가 걸치는 모든 연도를 조회해 범위 안의 공휴일만 이벤트에 기입한다.
-// 실패하면 null 을 반환하고, 클라이언트는 내장 KR_HOLIDAYS 로 폴백한다. (무료 플랜: 월 100콜)
+// ---- 공휴일 캐시 (hudy.co.kr) ----
+// hudy 무료 플랜은 월 100콜이라 매 생성마다 호출하지 않는다.
+// 서버 구동 시 캐시 파일(.data/holidays-cache.json)이 없으면 최초 1회만
+// 현재+미래 5개년(6개 연도)을 연 단위 API 로 받아 저장하고(연 1콜에 그 해 모든 월 포함),
+// 약속 생성 시에는 캐시만 읽는다. (Cloudflare 쪽은 D1 holiday_cache 테이블이 같은 역할)
 const HOLIDAY_API_ENDPOINT = 'https://api.hudy.co.kr/v2/holidays';
+const HOLIDAY_CACHE_YEARS = 6; // 현재 연도 + 미래 5개년
+const HOLIDAY_CACHE_PATH = path.join(DATA_DIR, 'holidays-cache.json');
 
-async function fetchHolidaysForRange(startDate, endDate, apiKey) {
-  if (!apiKey) return null;
-  const holidays = {};
+// 한 해의 공휴일을 { 'yyyy-MM-dd': '이름' } 으로 반환. 실패는 null. (빈 해는 {} — 정상)
+async function fetchHolidayYear(year, apiKey) {
   try {
-    for (let year = Number(startDate.slice(0, 4)); year <= Number(endDate.slice(0, 4)); year++) {
-      const response = await fetch(`${HOLIDAY_API_ENDPOINT}?year=${year}`, {
-        headers: { 'x-api-key': apiKey },
-        signal: AbortSignal.timeout(5000),
-      });
-      if (!response.ok) {
-        console.error(`[holidays] hudy 응답 ${response.status} (year=${year})`);
-        return null;
-      }
-      const payload = await response.json().catch(() => null);
-      if (!payload || payload.result !== true || !Array.isArray(payload.data)) return null;
-      for (const holiday of payload.data) {
-        const date = String(holiday.date || '');
-        if (date >= startDate && date <= endDate) holidays[date] = String(holiday.name || '').slice(0, 20);
-      }
+    const response = await fetch(`${HOLIDAY_API_ENDPOINT}?year=${year}`, {
+      headers: { 'x-api-key': apiKey },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) {
+      console.error(`[holidays] hudy 응답 ${response.status} (year=${year})`);
+      return null;
+    }
+    const payload = await response.json().catch(() => null);
+    if (!payload || payload.result !== true || !Array.isArray(payload.data)) return null;
+    const holidays = {};
+    for (const holiday of payload.data) {
+      const date = String(holiday.date || '');
+      if (date) holidays[date] = String(holiday.name || '').slice(0, 20);
     }
     return holidays;
   } catch (error) {
-    console.error(`[holidays] hudy 조회 실패: ${error.message}`);
+    console.error(`[holidays] hudy 조회 실패 (year=${year}): ${error.message}`);
     return null;
   }
+}
+
+function readHolidayCache() {
+  try {
+    return JSON.parse(fs.readFileSync(HOLIDAY_CACHE_PATH, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+// 서버 구동 시 1회: 캐시 파일이 없을 때만 시딩한다. 빈 해(데이터 미공개)도 저장해 재호출을 막는다.
+async function seedHolidayCache() {
+  if (readHolidayCache()) return;
+  const apiKey = process.env.HUDY_API_KEY;
+  if (!apiKey) {
+    console.log('[holidays] HUDY_API_KEY 없음 — 내장 데이터 폴백으로 동작');
+    return;
+  }
+  const baseYear = new Date().getFullYear();
+  const cache = { fetchedAt: new Date().toISOString(), years: {} };
+  for (let year = baseYear; year < baseYear + HOLIDAY_CACHE_YEARS; year++) {
+    const holidays = await fetchHolidayYear(year, apiKey);
+    if (holidays === null) continue; // 실패한 해는 저장하지 않아 다음 구동 때 다시 시도된다
+    cache.years[year] = holidays;
+  }
+  if (Object.keys(cache.years).length === 0) {
+    console.error('[holidays] 시딩 실패 — 내장 데이터 폴백으로 동작');
+    return;
+  }
+  fs.writeFileSync(HOLIDAY_CACHE_PATH, JSON.stringify(cache, null, 2));
+  console.log(`[holidays] 캐시 시딩 완료 (${Object.keys(cache.years).join(', ')})`);
+}
+
+// 표시 범위의 공휴일을 캐시에서 읽는다. 캐시가 없으면 null(클라이언트 내장 데이터 폴백).
+function getHolidaysForRange(startDate, endDate) {
+  const cache = readHolidayCache();
+  if (!cache || !cache.years) return null;
+  const holidays = {};
+  let hasYear = false;
+  for (let year = Number(startDate.slice(0, 4)); year <= Number(endDate.slice(0, 4)); year++) {
+    const yearMap = cache.years[year];
+    if (!yearMap) continue;
+    hasYear = true;
+    for (const [date, name] of Object.entries(yearMap)) {
+      if (date >= startDate && date <= endDate) holidays[date] = name;
+    }
+  }
+  return hasYear ? holidays : null;
 }
 
 // ---- 진행 단계 ----
@@ -627,8 +677,8 @@ async function handleApi(req, res, url) {
       createdAt: new Date().toISOString(),
       participants: [],
       places: [],
-      // 표시 범위의 공휴일. 조회 실패면 null 로 두고 클라이언트가 내장 데이터로 폴백한다.
-      holidays: await fetchHolidaysForRange(String(body.startDate), String(body.endDate), process.env.HUDY_API_KEY),
+      // 표시 범위의 공휴일 (구동 시 시딩해 둔 캐시에서 조회). 캐시가 없으면 null → 내장 데이터 폴백.
+      holidays: getHolidaysForRange(String(body.startDate), String(body.endDate)),
     };
     saveEvent(event);
     return sendJson(res, 200, { id });
@@ -905,4 +955,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`회식 날짜 잡기 서버 실행 중: http://localhost:${PORT}`);
+  // 공휴일 캐시 시딩은 기동을 막지 않도록 백그라운드로 돌린다.
+  seedHolidayCache().catch((error) => console.error(`[holidays] 시딩 오류: ${error.message}`));
 });
