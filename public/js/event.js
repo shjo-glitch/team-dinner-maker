@@ -1089,7 +1089,7 @@ async function renderShareLauncher() {
     return;
   }
 
-  hint.textContent = '데스크톱 Chrome·Edge에서만 동작해요. 모바일에서는 참여 링크를 복사해 붙여넣어 주세요.';
+  hint.textContent = '팀즈 공유는 데스크톱 Chrome·Edge에서만 동작해요. 모바일에서는 카카오톡 공유나 참여 링크 복사를 이용해 주세요.';
   const button = document.createElement('div');
   button.className = 'teams-share-button';
   button.setAttribute('data-href', location.href);
@@ -1103,7 +1103,7 @@ async function renderShareLauncher() {
     if (anchor && !anchor.querySelector('.share-launcher-label')) {
       const label = document.createElement('span');
       label.className = 'share-launcher-label';
-      label.textContent = 'Teams로 공유';
+      label.textContent = '팀즈로 공유';
       anchor.appendChild(label);
     }
   } catch {

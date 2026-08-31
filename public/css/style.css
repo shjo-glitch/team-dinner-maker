@@ -251,12 +251,14 @@ input:focus-visible { border-color: var(--accent); background: #fffefa; box-shad
 .share-method-tag { padding: 3px 8px; color: var(--ink-soft); border: 1px solid var(--line); border-radius: 999px; background: var(--surface-warm); font-size: 10px; font-weight: 700; }
 .share-method-tag.ok { color: var(--success); border-color: #a6c9b4; background: #eaf3ed; }
 .share-method-copy { margin: 9px 0 14px; color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
-.share-launcher { display: flex; align-items: center; justify-content: center; min-height: 46px; }
+.share-app-row { display: flex; align-items: stretch; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.share-app-row .kakao-share-btn, .share-app-row .share-launcher a { height: 44px; min-height: 44px; padding-top: 0; padding-bottom: 0; box-sizing: border-box; }
+.share-launcher { display: flex; align-items: center; justify-content: center; }
+.share-launcher:empty { display: none; }
 .share-launcher a { display: inline-flex; align-items: center; gap: 9px; padding: 9px 17px 9px 13px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); box-shadow: 3px 3px 0 var(--paper-deep); text-decoration: none; transition: border-color 150ms ease, background 150ms ease, transform 150ms ease; }
 .share-launcher a:hover { border-color: #b9a58e; background: var(--surface-warm); transform: translate(-1px, -1px); }
 .share-launcher img { display: block; }
 .share-launcher-label { color: var(--ink); font-size: 13px; font-weight: 700; }
-.share-launcher:empty { display: none; }
 .share-preview-label { margin: 15px 0 6px; color: var(--ink-soft); font-size: 11px; font-weight: 700; }
 
 .link-preview { padding: 12px 14px; border: 1px solid var(--line); border-left: 3px solid var(--sat); border-radius: 3px; background: var(--surface); }
