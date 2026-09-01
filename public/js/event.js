@@ -62,7 +62,7 @@ function renderSteps() {
   shareStep.classList.toggle('clickable', shareable);
   shareStep.setAttribute('role', shareable ? 'button' : '');
   shareStep.tabIndex = shareable ? 0 : -1;
-  shareStep.title = shareable ? '팀즈로 공유하기' : '';
+  shareStep.title = shareable ? '확정된 일정 공유하기' : '';
 }
 
 let eventData = null;
@@ -848,7 +848,7 @@ function renderConfirmedPlace() {
     <p class="confirmed-place-name">${esc(place.name)}</p>
     <p class="confirmed-place-address">${esc(place.roadAddress || place.address || '')}</p>
     <a class="confirmed-place-link" href="${esc(placeMapLink(place))}" target="_blank" rel="noopener noreferrer">지도에서 보기 ↗</a>
-    ${place.link ? '' : '<p class="confirmed-place-warn">장소 공유 링크가 없어 <b>검색</b>으로 연결돼요. 장소를 다시 확정하며 링크를 넣으면 팀즈로도 함께 전달됩니다.</p>'}`;
+    ${place.link ? '' : '<p class="confirmed-place-warn">장소 공유 링크가 없어 <b>검색</b>으로 연결돼요. 장소를 다시 확정하며 링크를 넣으면 공유할 때도 함께 전달됩니다.</p>'}`;
 }
 
 function renderPlacePanel() {
@@ -1165,7 +1165,7 @@ function openPlaceDialog(placeId) {
   const isConfirmed = !isPickMode && place.id === eventData.confirmedPlaceId;
   $('place-dialog-title').textContent = isConfirmed ? '장소를 다시 정할까요?' : '이 곳으로 확정할까요?';
   $('place-dialog-copy').textContent = isConfirmed
-    ? `'${place.name}' 확정을 풀면 팀즈로 공유할 수 없게 돼요. 후보지와 투표는 그대로 남습니다.`
+    ? `'${place.name}' 확정을 풀면 일정을 공유할 수 없게 돼요. 후보지와 투표는 그대로 남습니다.`
     : isPickMode
       ? '최종 장소를 고르고 확정하면 일정 확정과 함께 공유 단계가 열려요.'
       : `'${place.name}'을(를) 최종 장소로 확정하면 공유 단계가 열려요.`;
