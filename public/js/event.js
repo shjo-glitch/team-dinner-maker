@@ -262,6 +262,7 @@ function renderVotePeople() {
 }
 
 // 장소 후보를 득표순 순위 행으로 그린다. (동점은 같은 순위)
+// 각 행은 지도 링크다 — 공유 링크가 있으면 그 링크로, 없으면 네이버 지도 검색으로 새 창에서 열린다.
 function placeRankingRows(places) {
   let rank = 0;
   let prevVotes = -1;
@@ -273,10 +274,12 @@ function placeRankingRows(places) {
         prevVotes = votes;
       }
       return `
-        <div class="candidate-ranking-row rank-${Math.min(rank, 3)}">
+        <a class="candidate-ranking-row place-rank-row rank-${Math.min(rank, 3)}" href="${esc(placeMapLink(place))}"
+           target="_blank" rel="noopener noreferrer" title="지도에서 '${esc(place.name)}' 보기">
           <span class="candidate-rank-label">${rank}위</span>
           <span class="candidate-rank-dates place-rank-name">${esc(place.name)}<small class="place-rank-votes">♥ ${votes}</small></span>
-        </div>`;
+          <span class="place-rank-map" aria-hidden="true">지도 ↗</span>
+        </a>`;
     })
     .join('');
 }

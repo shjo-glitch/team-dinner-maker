@@ -287,6 +287,10 @@ input:focus-visible { border-color: var(--accent); background: #fffefa; box-shad
 .confirmed-summary-sub { margin-top: 5px; color: var(--ink-soft); font-size: 13px; word-break: keep-all; }
 .confirmed-summary-link { display: inline-block; margin-top: 10px; color: var(--success); font-size: 12px; font-weight: 700; text-decoration: none; }
 .confirmed-summary-link:hover { text-decoration: underline; }
+.place-rank-row { grid-template-columns: 52px minmax(0, 1fr) auto; color: inherit; cursor: pointer; text-decoration: none; transition: border-color 150ms ease, background 150ms ease, transform 150ms ease; }
+.place-rank-row:hover { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-1px); }
+.place-rank-map { color: var(--ink-soft); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.place-rank-row:hover .place-rank-map { color: var(--accent); }
 .place-rank-name { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .place-rank-name > small.place-rank-votes { flex: 0 0 auto; color: var(--accent); font-family: 'Gowun Dodum', sans-serif; font-size: 12px; font-weight: 700; }
 .ranking-foot { display: flex; justify-content: flex-end; margin-top: 13px; }
