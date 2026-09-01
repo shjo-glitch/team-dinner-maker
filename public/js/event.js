@@ -848,7 +848,7 @@ function renderConfirmedPlace() {
     <p class="confirmed-place-name">${esc(place.name)}</p>
     <p class="confirmed-place-address">${esc(place.roadAddress || place.address || '')}</p>
     <a class="confirmed-place-link" href="${esc(placeMapLink(place))}" target="_blank" rel="noopener noreferrer">지도에서 보기 ↗</a>
-    ${place.link ? '' : '<p class="confirmed-place-warn">네이버 지도 링크가 없어 <b>검색</b>으로 연결돼요. 장소를 다시 확정하며 링크를 넣으면 팀즈로도 함께 전달됩니다.</p>'}`;
+    ${place.link ? '' : '<p class="confirmed-place-warn">장소 공유 링크가 없어 <b>검색</b>으로 연결돼요. 장소를 다시 확정하며 링크를 넣으면 팀즈로도 함께 전달됩니다.</p>'}`;
 }
 
 function renderPlacePanel() {
@@ -964,9 +964,9 @@ async function submitConfirm(e) {
     $('confirm-dialog').close();
     syncManageLockState();
     syncConfirmState();
-    // 공유 버튼은 일정+장소가 모두 확정됐을 때만 나오므로 후보 목록도 다시 그린다.
     renderPlaceList();
-    if (isScheduleConfirmed()) switchTab('place');
+    // 결과 탭을 보고 있으면 후보/확정 카드가 실시간으로 전환되게 다시 그린다.
+    if (!$('panel-result').hidden) renderResult();
     maybeEnterShareStep(wasFullyConfirmed);
   } catch (err) {
     errorEl.textContent = err.message;
@@ -1011,6 +1011,7 @@ function renderTeamsPreview() {
   if (place) {
     rows.push(previewRow('장소', place.name));
     if (place.roadAddress || place.address) rows.push(previewRow('주소', place.roadAddress || place.address));
+    if (place.link) rows.push(previewRow('장소 공유 링크', place.link));
   }
   rows.push(previewRow('참여 인원', `${eventData.participants.length}명 / 총원 ${eventData.totalCount}명`));
 
@@ -1019,7 +1020,7 @@ function renderTeamsPreview() {
     <p class="teams-preview-meta">${esc(formatShortDate(eventData.confirmedDate))} ${esc(formatMeetTime(eventData.confirmedTime))}</p>
     ${note ? `<p class="teams-preview-note">${esc(note)}</p>` : ''}
     ${rows.join('')}
-    <p class="teams-preview-action">${place && place.link ? '네이버 지도에서 보기 · ' : ''}약속 페이지 열기 →</p>`;
+    <p class="teams-preview-action">${place && place.link ? '지도에서 보기 · ' : ''}약속 페이지 열기 →</p>`;
 
   renderWebhookFields();
 }
@@ -1037,7 +1038,7 @@ function renderWebhookFields() {
   if (place && place.link) fields.push(['url', place.link]);
   $('webhook-fields').innerHTML =
     fields.map(([key, value]) => `<div class="webhook-field"><code>${key}</code><span>${esc(value)}</span></div>`).join('') +
-    (place && place.link ? '' : '<p class="hint">네이버 지도 링크가 없어 <code>url</code> 필드는 <b>보내지 않습니다.</b> 장소를 다시 확정하며 링크를 넣으면 포함돼요.</p>');
+    (place && place.link ? '' : '<p class="hint">장소 공유 링크가 없어 <code>url</code> 필드는 <b>보내지 않습니다.</b> 장소를 다시 확정하며 링크를 넣으면 포함돼요.</p>');
 }
 
 // OG 설명문·공유 문구에 쓰는 요약. (서버 buildEventMeta 와 같은 규칙)
@@ -1220,6 +1221,8 @@ async function submitPlaceConfirm(e) {
     $('place-dialog').close();
     syncConfirmState();
     renderPlacePanel();
+    // 결과 탭을 보고 있으면 후보/확정 카드가 실시간으로 전환되게 다시 그린다.
+    if (!$('panel-result').hidden) renderResult();
     maybeEnterShareStep(wasFullyConfirmed);
   } catch (err) {
     errorEl.textContent = err.message;

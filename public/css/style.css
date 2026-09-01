@@ -144,7 +144,10 @@ input:focus-visible { border-color: var(--accent); background: #fffefa; box-shad
 /* ---------- people / results ---------- */
 .candidate-ranking { overflow: hidden; padding-block: 28px 25px; background-color: #fffaf0; background-image: radial-gradient(circle at 100% 0, rgba(255, 203, 69, 0.22), transparent 30%); }
 .candidate-ranking::before { width: 112px; background: var(--mustard); }
+.candidate-ranking-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.candidate-ranking-titles { min-width: 0; }
 .candidate-ranking-head .section-kicker { margin-bottom: 6px; }
+.toggle-btn.card-toggle { min-height: 33px; flex: 0 0 auto; padding: 6px 13px; font-size: 11px; }
 .candidate-ranking-head h2 { margin: 0; }
 .candidate-ranking-list { display: grid; gap: 8px; margin-top: 18px; }
 .candidate-ranking-row { display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: center; gap: 12px; min-height: 48px; padding: 7px 10px 7px 7px; border: 1px solid rgba(133, 104, 72, 0.18); border-radius: 3px; background: rgba(255, 253, 248, 0.78); }

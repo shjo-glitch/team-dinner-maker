@@ -31,12 +31,6 @@
         </ol>
         <div class="toolbar">
           <button type="button" class="btn ghost small" id="copy-link">🔗 참여 링크 복사</button>
-          <button type="button" class="toggle-btn" id="confirm-event" aria-pressed="false">
-            <span class="toggle-label">일정 확정하기</span>
-          </button>
-          <button type="button" class="toggle-btn" id="confirm-place-toggle" aria-pressed="false">
-            <span class="toggle-label">장소 확정하기</span>
-          </button>
           <button type="button" class="btn ghost danger small" id="cancel-event">약속 파기하기</button>
         </div>
       </div>
@@ -88,16 +82,26 @@
       <section id="panel-result" hidden>
         <section class="card candidate-ranking" id="date-ranking-card" aria-labelledby="candidate-ranking-title">
           <div class="candidate-ranking-head">
-            <p class="section-kicker" id="date-ranking-kicker">THE SHORTLIST</p>
-            <h2 id="candidate-ranking-title">회식 날 후보 순위</h2>
+            <div class="candidate-ranking-titles">
+              <p class="section-kicker" id="date-ranking-kicker">THE SHORTLIST</p>
+              <h2 id="candidate-ranking-title">회식 날 후보 순위</h2>
+            </div>
+            <button type="button" class="toggle-btn card-toggle" id="confirm-event" aria-pressed="false">
+              <span class="toggle-label">일정 확정하기</span>
+            </button>
           </div>
           <div class="candidate-ranking-list" id="candidate-ranking" aria-live="polite"></div>
         </section>
 
         <section class="card candidate-ranking" id="place-ranking-card" aria-labelledby="place-ranking-title">
           <div class="candidate-ranking-head">
-            <p class="section-kicker" id="place-ranking-kicker">THE VENUE SHORTLIST</p>
-            <h2 id="place-ranking-title">회식 장소 후보 순위</h2>
+            <div class="candidate-ranking-titles">
+              <p class="section-kicker" id="place-ranking-kicker">THE VENUE SHORTLIST</p>
+              <h2 id="place-ranking-title">회식 장소 후보 순위</h2>
+            </div>
+            <button type="button" class="toggle-btn card-toggle" id="confirm-place-toggle" aria-pressed="false">
+              <span class="toggle-label">장소 확정하기</span>
+            </button>
           </div>
           <div class="candidate-ranking-list" id="place-ranking" aria-live="polite"></div>
           <div class="ranking-foot">
@@ -165,9 +169,9 @@
           </div>
           <div class="place-results" id="place-results"></div>
           <div class="field">
-            <label for="place-link">네이버 지도 링크 (선택)</label>
-            <input type="text" id="place-link" placeholder="https://naver.me/..." maxlength="300" />
-            <p class="hint">공유한 POI 링크를 넣으면 후보 카드에서 그 링크로 바로 열려요. 비워두면 이름과 주소로 지도 검색 링크를 만들어 둡니다.</p>
+            <label for="place-link">장소 공유 링크 (선택)</label>
+            <input type="text" id="place-link" placeholder="https://naver.me/... 또는 https://kko.to/..." maxlength="300" />
+            <p class="hint"><b>네이버지도·카카오맵·구글 지도</b> 등 지도 앱에서 공유한 링크를 넣으면 후보 카드에서 그 링크로 바로 열려요. 비워두면 이름과 주소로 지도 검색 링크를 만들어 둡니다.</p>
           </div>
           <button type="button" class="btn block" id="place-add-btn" disabled><span>후보로 등록</span><span aria-hidden="true">→</span></button>
           <p class="error-msg" id="place-error"></p>
@@ -209,9 +213,9 @@
           <p class="hint">득표순이에요. 후보 카드의 '이 곳으로 확정하기'로도 지정할 수 있어요.</p>
         </div>
         <div class="field" id="place-dialog-link-field">
-          <label for="place-confirm-link">네이버 지도 링크 (선택)</label>
-          <input type="url" id="place-confirm-link" placeholder="https://naver.me/..." maxlength="300" autocomplete="off" spellcheck="false" />
-          <p class="hint">넣어두면 팀즈로 보낼 때 <b>정확한 지도 링크</b>가 함께 전달돼요. 비우면 링크 없이 보냅니다.</p>
+          <label for="place-confirm-link">장소 공유 링크 (선택)</label>
+          <input type="url" id="place-confirm-link" placeholder="https://naver.me/... 또는 https://kko.to/..." maxlength="300" autocomplete="off" spellcheck="false" />
+          <p class="hint"><b>네이버지도·카카오맵·구글 지도</b> 등 지도 앱의 공유 링크를 넣어두면 팀즈로 보낼 때 <b>정확한 지도 링크</b>가 함께 전달돼요. 비우면 링크 없이 보냅니다.</p>
         </div>
         <div class="field">
           <label for="place-confirm-pin">관리 비밀번호</label>

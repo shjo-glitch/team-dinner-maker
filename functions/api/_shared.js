@@ -217,7 +217,7 @@ export function placeMapLink(place) {
 }
 
 // ---- 후보 장소 ----
-// 저장하는 링크는 네이버 도메인으로 제한한다. (임의 외부 링크 등록 방지)
+// 장소 공유 링크는 주요 지도 앱(네이버지도·카카오맵·구글 지도) 도메인으로 제한한다. (임의 외부 링크 등록 방지)
 export function normalizePlaceLink(raw) {
   const value = String(raw || '').trim();
   if (!value) return { link: '' };
@@ -230,8 +230,9 @@ export function normalizePlaceLink(raw) {
   }
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return { error: '링크 형식이 올바르지 않습니다.' };
   const host = parsed.hostname.toLowerCase();
-  const isNaver = ['naver.me', 'naver.com'].some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
-  if (!isNaver) return { error: '네이버 지도 링크(naver.me, map.naver.com)만 등록할 수 있어요.' };
+  const MAP_LINK_HOSTS = ['naver.me', 'naver.com', 'kko.to', 'kakao.com', 'maps.app.goo.gl', 'google.com', 'goo.gl'];
+  const isMapLink = MAP_LINK_HOSTS.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
+  if (!isMapLink) return { error: '지도 앱의 공유 링크(네이버지도·카카오맵·구글 지도)만 등록할 수 있어요.' };
   return { link: parsed.toString() };
 }
 
@@ -448,12 +449,13 @@ export function buildTeamsCard(event, shareUrl, note) {
   if (place) {
     facts.push({ title: '장소', value: place.name });
     if (place.roadAddress || place.address) facts.push({ title: '주소', value: place.roadAddress || place.address });
+    if (mapUrl) facts.push({ title: '장소 공유 링크', value: mapUrl });
   }
   facts.push({ title: '참여 인원', value: `${event.participants.length}명 / 총원 ${event.totalCount}명` });
   body.push({ type: 'FactSet', facts, spacing: 'Medium' });
 
   const actions = [];
-  if (mapUrl) actions.push({ type: 'Action.OpenUrl', title: '네이버 지도에서 보기', url: mapUrl });
+  if (mapUrl) actions.push({ type: 'Action.OpenUrl', title: '지도에서 보기', url: mapUrl });
   actions.push({ type: 'Action.OpenUrl', title: '약속 페이지 열기', url: shareUrl });
 
   return {
