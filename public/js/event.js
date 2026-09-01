@@ -1056,17 +1056,20 @@ function shareSummaryParts() {
   return parts;
 }
 
-// Share to Teams 의 compose box 기본 문구. (마이크로소프트 사양상 200자를 넘으면 잘린다)
-// 공유 버튼은 일정·장소가 모두 확정된 뒤에만 노출되므로 확정 값이 항상 존재한다.
+// 공유 문구(카카오톡 텍스트 · Teams 공유창 미리채움 공용).
+// 공유는 일정·장소가 모두 확정된 뒤에만 열리므로 확정 값이 항상 존재한다.
+// 개행은 CRLF 로 넣는다 — Teams 공유창이 URL 파라미터의 LF(%0A)만으로는 줄을 나누지 않는 경우가 있다.
 function buildShareMessage() {
   const place = confirmedPlace();
-  return [
+  const lines = [
     eventData.title,
     `모임 날짜/시간   : ${formatShortDate(eventData.confirmedDate)} ${formatMeetTime(eventData.confirmedTime)}`,
     `모이는 곳        : ${place ? place.name : ''}`,
-    `모임 인원        : 참여 ${eventData.participants.length}명 / 총원 ${eventData.totalCount}명`,
-    `웹에서 자세히보기: ${location.href}`,
-  ].join('\n');
+  ];
+  if (place && place.link) lines.push(`장소 공유 링크   : ${place.link}`);
+  lines.push(`모임 인원        : 참여 ${eventData.participants.length}명 / 총원 ${eventData.totalCount}명`);
+  lines.push(`웹에서 자세히보기: ${location.href}`);
+  return lines.join('\r\n');
 }
 
 // 채널에 붙는 링크 카드는 서버가 넣어준 OG 태그로 만들어진다. 같은 내용을 화면에서도 보여준다.
