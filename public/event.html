@@ -47,7 +47,7 @@
           <div class="field">
             <label for="name">이름</label>
             <input type="text" id="name" placeholder="이름을 입력하세요" maxlength="20" />
-            <p class="hint" id="name-hint">이름을 입력한 뒤 엔터를 누르면 참여자로 등록돼요. 일정 수정은 아래 참여자 이름을 선택해 주세요.</p>
+            <p class="hint" id="name-hint">이름을 입력하고 엔터를 누르면 참여자로 등록되고, 바로 날짜를 고를 수 있어요.</p>
           </div>
           <div class="field" id="vote-people-wrap">
             <label>참여자</label>
@@ -55,7 +55,7 @@
           </div>
         </div>
 
-        <div class="card">
+        <div class="card" id="vote-calendar-card" hidden>
           <h2>가능한 날짜를 선택하세요</h2>
           <p class="hint" style="margin-bottom: 12px;">
             날짜를 클릭하거나, <b>누른 채로 드래그하면 시작일~끝일 범위가 한 번에</b> 선택돼요.

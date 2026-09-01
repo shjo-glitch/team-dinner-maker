@@ -166,7 +166,10 @@ async function main() {
     await page.waitForSelector('#vote-calendar .cal-cell[data-date]');
 
     // ---------- 02. 드래그 범위 미리보기 ----------
+    // 새 온보딩 흐름: 이름 입력 후 엔터로 등록하면 자동 선택되며 날짜 달력이 열린다.
     await page.type('#name', LAST_PERSON);
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => !document.getElementById('vote-calendar-card').hidden, { timeout: 15000 });
     await sleep(300);
     const start = await cellCenter(TOP_DATES[0]);
     await page.mouse.move(start.x, start.y);

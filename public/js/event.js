@@ -222,19 +222,19 @@ function syncNameInputState() {
   nameInput.disabled = atCapacity;
   if (activeParticipantName) {
     nameInput.placeholder = `${activeParticipantName} 님 일정 수정 중`;
-    hint.textContent = `${activeParticipantName} 님의 일정을 수정 중이에요. 선택한 날짜를 저장하면 반영됩니다.`;
+    hint.textContent = `${activeParticipantName} 님의 일정을 수정 중이에요. 이름을 다시 누르면 선택이 해제돼요.`;
   } else if (atCapacity) {
     nameInput.value = '';
     nameInput.placeholder = '총원 등록 완료';
     hint.textContent = `총원 ${eventData.totalCount}명이 모두 등록됐어요. 참여자 이름을 선택하면 일정을 수정할 수 있어요.`;
   } else {
     nameInput.placeholder = '이름을 입력하세요';
-    hint.textContent = '이름을 입력한 뒤 엔터를 누르면 참여자로 등록돼요. 일정 수정은 아래 참여자 이름을 선택해 주세요.';
+    hint.textContent = '이름을 입력하고 엔터를 누르면 참여자로 등록되고, 바로 날짜를 고를 수 있어요. 등록된 일정은 참여자 이름을 눌러 수정해요.';
   }
 }
 
 function updateSaveState() {
-  const hasScheduleOwner = Boolean(activeParticipantName || $('name').value.trim());
+  const hasScheduleOwner = Boolean(activeParticipantName);
   const hasSelectedDates = voteCal && voteCal.selected.size > 0;
   const disabled = !hasScheduleOwner || !hasSelectedDates;
   $('save-btn').disabled = disabled;
@@ -414,20 +414,14 @@ async function saveMySchedule() {
     if (dates.length > 0) {
       // 다음 사람이 이어서 등록할 수 있게 이름과 선택을 즉시 비운다.
       $('name').value = '';
-      activeParticipantName = null;
-      voteCal.setSelected([]);
-      renderVotePeople();
-      syncNameInputState();
-      updateSelectedCount(0);
+      deactivateParticipant();
       switchTab('result');
     } else {
-      // 날짜 없이 엔터 등록한 뒤에는 이름 입력칸을 비우고, 참여자 뱃지로 일정 수정을 시작한다.
+      // 날짜 없이 엔터로 등록하면 그 사람을 바로 선택해 달력이 열리게 한다.
       $('name').value = '';
       activeParticipantName = null;
-      renderVotePeople();
-      syncNameInputState();
-      voteCal.render();
-      infoEl.textContent = `'${name}' 님이 참여자로 등록됐어요. 이름 뱃지를 선택해 가능한 날짜를 등록해 주세요.`;
+      activateParticipant(name);
+      infoEl.textContent = `'${name}' 님이 참여자로 등록됐어요. 아래 달력에서 가능한 날짜를 고르고 저장해 주세요.`;
     }
   } catch (err) {
     errorEl.textContent = err.message;
@@ -437,7 +431,28 @@ async function saveMySchedule() {
   }
 }
 
+// 날짜 선택 달력은 참여자가 선택돼 있을 때만 보여준다. (처음 온 사람이 헤매지 않도록)
+function syncCalendarVisibility() {
+  const hiddenNow = !activeParticipantName;
+  $('vote-calendar-card').hidden = hiddenNow;
+  if (hiddenNow) $('float-save').hidden = true;
+}
+
+function deactivateParticipant() {
+  activeParticipantName = null;
+  voteCal.setSelected([]);
+  renderVotePeople();
+  syncNameInputState();
+  updateSelectedCount(0);
+  syncCalendarVisibility();
+}
+
 function activateParticipant(name) {
+  // 이미 선택된 참여자를 다시 누르면 선택이 해제된다.
+  if (activeParticipantName === name) {
+    deactivateParticipant();
+    return;
+  }
   const participant = eventData.participants.find((p) => p.name === name);
   if (!participant) return;
 
@@ -447,6 +462,8 @@ function activateParticipant(name) {
   renderVotePeople();
   syncNameInputState();
   updateSelectedCount(participant.dates.length);
+  syncCalendarVisibility();
+  voteCal.render();
 }
 
 async function deleteParticipant(name) {
@@ -458,6 +475,7 @@ async function deleteParticipant(name) {
       activeParticipantName = null;
       $('name').value = '';
       voteCal.setSelected([]);
+      syncCalendarVisibility();
     }
     renderHead();
     renderVotePeople();
@@ -1429,6 +1447,10 @@ let syncStopped = false;
 // 서버 데이터에서 오는 화면만 다시 그린다.
 function applyRemoteUpdate(fresh) {
   eventData = fresh;
+  // 수정하려던 참여자가 다른 곳에서 삭제됐으면 선택을 해제한다.
+  if (activeParticipantName && !fresh.participants.some((p) => p.name === activeParticipantName)) {
+    deactivateParticipant();
+  }
   syncConfirmState(); // 헤더·단계·토글 (renderHead 포함)
   renderVotePeople();
   syncNameInputState();
@@ -1479,7 +1501,7 @@ async function init() {
     mode: 'select',
     startDate: range.startDate,
     endDate: range.endDate,
-    canSelect: () => Boolean(activeParticipantName || $('name').value.trim()),
+    canSelect: () => Boolean(activeParticipantName),
     onChange: (sel) => {
       updateSelectedCount(sel.size);
     },
@@ -1516,13 +1538,7 @@ async function init() {
 
   // 기존 참여자를 선택한 뒤 새 이름을 입력하면 새 참여자 등록 흐름으로 전환한다.
   $('name').addEventListener('input', () => {
-    if (activeParticipantName) {
-      activeParticipantName = null;
-      voteCal.setSelected([]);
-      renderVotePeople();
-      syncNameInputState();
-    }
-    voteCal.render();
+    if (activeParticipantName) deactivateParticipant();
     updateSaveState();
   });
 
@@ -1532,7 +1548,7 @@ async function init() {
   const floatEl = $('float-save');
   new IntersectionObserver(
     ([entry]) => {
-      floatEl.hidden = entry.isIntersecting;
+      floatEl.hidden = entry.isIntersecting || $('vote-calendar-card').hidden;
     },
     { rootMargin: '0px 0px -8px 0px' }
   ).observe($('save-btn'));
