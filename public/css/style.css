@@ -331,9 +331,10 @@ input:focus-visible { border-color: var(--accent); background: #fffefa; box-shad
 .place-card-footer { display: flex; grid-column: 1 / -1; align-items: stretch; gap: 8px; margin-top: 11px; }
 .place-card-footer .place-confirm-btn { min-width: 0; flex: 1; margin-top: 0; }
 
-/* 확정 토글 버튼: OFF = 비활성(disabled) 느낌, ON = 초록으로 채워진 활성(enabled) 상태 */
-.toggle-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 8px 15px; color: #a89c8f; border: 1px solid #ddd3c6; border-radius: 3px; background: #f0eadf; cursor: pointer; font-size: 12px; font-weight: 700; box-shadow: none; transition: color 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease; }
-.toggle-btn:hover { color: var(--ink-soft); border-color: #c3b5a3; background: var(--surface-warm); }
+/* 확정 토글 버튼: OFF = 와인 레드 활성 버튼(눌러서 확정), ON = 초록으로 채워진 확정 상태 */
+.toggle-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 8px 15px; color: var(--accent-contrast); border: 1px solid var(--accent); border-radius: 3px; background: var(--accent); cursor: pointer; font-size: 12px; font-weight: 700; box-shadow: 2px 2px 0 var(--mustard); transition: color 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease; }
+.toggle-btn:hover { background: var(--accent-dark); border-color: var(--accent-dark); box-shadow: 3px 3px 0 var(--mustard); transform: translate(-1px, -1px); }
+.toggle-btn:active { box-shadow: 1px 1px 0 var(--mustard); transform: translate(1px, 1px); }
 .toggle-btn:focus-visible { outline: 3px solid rgba(156, 48, 36, 0.35); outline-offset: 3px; }
 .toggle-btn:disabled { cursor: not-allowed; opacity: 0.55; }
 .toggle-btn.on { color: #fff; border-color: #2f9e63; background: #3cb371; box-shadow: 2px 2px 0 #bfe0cd; }
