@@ -1413,6 +1413,47 @@ async function submitTeamsExport(e) {
   }
 }
 
+// ---- 실시간 동기화 ----
+// 다른 참여자의 등록·투표·장소 추가·확정이 열려 있는 화면에 반영되도록 주기적으로 받아온다.
+// Cloudflare(D1)에는 변경 푸시 채널이 없어 SSE 연결은 서버 내부 폴링 + 상주 연결이 되어
+// 오히려 비용·안정성이 나빠진다. 대신 변경 감지 폴링을 쓴다:
+// 10초 간격 + 탭이 다시 보일 때 즉시, 그리고 변경이 있을 때만 다시 그린다.
+const SYNC_INTERVAL_MS = 10 * 1000;
+let syncInFlight = false;
+let syncStopped = false;
+
+// 내가 입력 중인 상태(달력의 미저장 선택, 이름/검색어 입력값)는 건드리지 않고
+// 서버 데이터에서 오는 화면만 다시 그린다.
+function applyRemoteUpdate(fresh) {
+  eventData = fresh;
+  syncConfirmState(); // 헤더·단계·토글 (renderHead 포함)
+  renderVotePeople();
+  syncNameInputState();
+  if (!$('panel-result').hidden) renderResult();
+  if (!$('panel-place').hidden) renderPlacePanel();
+}
+
+async function syncEventData() {
+  if (syncInFlight || syncStopped || document.hidden || !eventData) return;
+  syncInFlight = true;
+  try {
+    const res = await fetch(`/api/events/${eventId}`, { cache: 'no-store' });
+    if (res.status === 404) {
+      // 약속이 파기됨 — 더 폴링하지 않는다.
+      syncStopped = true;
+      return;
+    }
+    if (!res.ok) return;
+    const fresh = await res.json();
+    if (JSON.stringify(fresh) === JSON.stringify(eventData)) return; // 변경 없음
+    applyRemoteUpdate(fresh);
+  } catch {
+    // 네트워크 오류는 다음 주기에 자연 재시도
+  } finally {
+    syncInFlight = false;
+  }
+}
+
 async function init() {
   const [loadedEvent, loadedConfig] = await Promise.all([eventId ? loadEvent() : null, loadConfig()]);
   eventData = loadedEvent;
@@ -1587,6 +1628,13 @@ async function init() {
     const picked = (eventData.places || []).find((candidate) => candidate.id === pendingPlaceId);
     $('place-confirm-link').value = picked && picked.link ? picked.link : '';
   });
+
+  // 실시간 동기화 시작: 주기 폴링 + 탭이 다시 보이거나 포커스될 때 즉시 갱신
+  setInterval(syncEventData, SYNC_INTERVAL_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) syncEventData();
+  });
+  window.addEventListener('focus', syncEventData);
 
   $('cancel-event').addEventListener('click', openCancelDialog);
   $('cancel-dialog-form').addEventListener('submit', cancelEvent);
