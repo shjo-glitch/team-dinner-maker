@@ -39,6 +39,13 @@ function confirmedPlace() {
   return (eventData.places || []).find((place) => place.id === eventData.confirmedPlaceId) || null;
 }
 
+// 공유 문구·카드에 싣는 '참여 인원'. 일정이 확정되면 투표 참여자 전체가 아니라
+// 확정 날짜에 표를 던진(=그날 올 수 있는) 인원만 센다. (서버 attendeeCount 와 같은 규칙)
+function attendeeCount() {
+  if (!isScheduleConfirmed()) return eventData.participants.length;
+  return eventData.participants.filter((participant) => (participant.dates || []).includes(eventData.confirmedDate)).length;
+}
+
 function isFullyConfirmed() {
   return isScheduleConfirmed() && Boolean(confirmedPlace());
 }
@@ -1034,7 +1041,7 @@ function renderTeamsPreview() {
     if (place.roadAddress || place.address) rows.push(previewRow('주소', place.roadAddress || place.address));
     if (place.link) rows.push(previewRow('장소 공유 링크', place.link));
   }
-  rows.push(previewRow('참여 인원', `${eventData.participants.length}명 / 총원 ${eventData.totalCount}명`));
+  rows.push(previewRow('참여 인원', `${attendeeCount()}명 / 총원 ${eventData.totalCount}명`));
 
   $('teams-preview').innerHTML = `
     <p class="teams-preview-title">🍷 ${esc(eventData.title)}</p>
@@ -1073,7 +1080,7 @@ function shareSummaryParts() {
     const dateRanks = topDateRanks(1);
     parts.push(dateRanks.length ? `날짜 1위 ${dateRanks[0].dates.join(', ')} (${dateRanks[0].count}명)` : '아직 등록된 일정이 없어요');
   }
-  parts.push(`참여 ${eventData.participants.length}명 / 총원 ${eventData.totalCount}명`);
+  parts.push(`참여 ${attendeeCount()}명 / 총원 ${eventData.totalCount}명`);
   return parts;
 }
 
@@ -1088,7 +1095,7 @@ function buildShareMessage() {
     `모이는 곳        : ${place ? place.name : ''}`,
   ];
   if (place && place.link) lines.push(`장소 공유 링크   : ${place.link}`);
-  lines.push(`모임 인원        : 참여 ${eventData.participants.length}명 / 총원 ${eventData.totalCount}명`);
+  lines.push(`모임 인원        : 참여 ${attendeeCount()}명 / 총원 ${eventData.totalCount}명`);
   lines.push(`웹에서 자세히보기: ${location.href}`);
   return lines.join('\r\n');
 }

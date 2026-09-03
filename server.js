@@ -294,6 +294,13 @@ function confirmedPlace(event) {
   return (event.places || []).find((place) => place.id === event.confirmedPlaceId) || null;
 }
 
+// 공유 문구·카드에 싣는 '참여 인원'. 일정이 확정되면 투표 참여자 전체가 아니라
+// 확정 날짜에 표를 던진(=그날 올 수 있는) 인원만 센다. 확정 전에는 투표 참여자 수.
+function attendeeCount(event) {
+  if (!isScheduleConfirmed(event)) return event.participants.length;
+  return event.participants.filter((participant) => (participant.dates || []).includes(event.confirmedDate)).length;
+}
+
 function isFullyConfirmed(event) {
   return isScheduleConfirmed(event) && Boolean(confirmedPlace(event));
 }
@@ -538,7 +545,7 @@ function buildTeamsCard(event, shareUrl, note) {
     if (place.roadAddress || place.address) facts.push({ title: '주소', value: place.roadAddress || place.address });
     if (mapUrl) facts.push({ title: '장소 공유 링크', value: mapUrl });
   }
-  facts.push({ title: '참여 인원', value: `${event.participants.length}명 / 총원 ${event.totalCount}명` });
+  facts.push({ title: '참여 인원', value: `${attendeeCount(event)}명 / 총원 ${event.totalCount}명` });
   body.push({ type: 'FactSet', facts, spacing: 'Medium' });
 
   const actions = [];
@@ -638,7 +645,7 @@ function buildEventMeta(event, shareUrl) {
     const dateRanks = topDateRanks(event, 1);
     parts.push(dateRanks.length ? `날짜 1위 ${dateRanks[0].dates.join(', ')} (${dateRanks[0].count}명)` : '아직 등록된 일정이 없어요');
   }
-  parts.push(`참여 ${event.participants.length}명 / 총원 ${event.totalCount}명`);
+  parts.push(`참여 ${attendeeCount(event)}명 / 총원 ${event.totalCount}명`);
   return { title: `🍷 ${event.title}`, description: parts.join(' · '), url: shareUrl };
 }
 
