@@ -502,11 +502,19 @@ export async function postToTeams(webhookUrl, card) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(card),
-      redirect: 'error', // 리다이렉트를 따라가면 호스트 화이트리스트가 무력해진다
+      // 리다이렉트를 따라가면 호스트 화이트리스트가 무력해진다.
+      // Cloudflare Workers 는 'error' 를 지원하지 않고 TypeError 를 던지므로(프로덕션 502 원인)
+      // 'manual' 로 받아서 3xx 를 아래에서 직접 실패 처리한다.
+      redirect: 'manual',
       signal: AbortSignal.timeout(10000),
     });
-  } catch {
+  } catch (err) {
+    console.error(`[teams-export] 웹후크 fetch 실패: ${err && err.message}`);
     return { status: 502, body: { error: 'Teams 웹후크에 연결하지 못했어요. URL이 아직 유효한지 확인해 주세요.' } };
+  }
+  if (response.status >= 300 && response.status < 400) {
+    console.error(`[teams-export] 웹후크가 리다이렉트를 반환해 중단 status=${response.status}`);
+    return { status: 502, body: { error: 'Teams 웹후크가 다른 주소로 이동하라고 응답해 중단했어요. 워크플로 URL을 다시 복사해 주세요.' } };
   }
   if (!response.ok) {
     // 진단용 서버 로그. (응답 본문은 클라이언트로 내려보내지 않는다)
