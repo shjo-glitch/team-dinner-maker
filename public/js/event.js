@@ -303,12 +303,35 @@ function renderPlaceRanking() {
     $('place-ranking-kicker').textContent = 'CONFIRMED';
     $('place-ranking-title').textContent = '확정된 장소';
     allButton.hidden = true;
+    // 실시간 동기화로 다시 그려질 때 입력 중이던 예약 링크가 날아가지 않게 보존한다.
+    const typingInput = $('reservation-input');
+    const draft = typingInput && document.activeElement === typingInput
+      ? { value: typingInput.value, start: typingInput.selectionStart, end: typingInput.selectionEnd }
+      : null;
+    const reservationLink = confirmed.reservationLink || '';
     listEl.innerHTML = `
       <div class="confirmed-summary">
         <p class="confirmed-summary-main">${esc(confirmed.name)}</p>
         <p class="confirmed-summary-sub">${esc(confirmed.roadAddress || confirmed.address || '')}</p>
         <a class="confirmed-summary-link" href="${esc(placeMapLink(confirmed))}" target="_blank" rel="noopener noreferrer">네이버 지도에서 보기 ↗</a>
+        <div class="reservation-field">
+          <p class="reservation-title">예약 앱(웹) 링크</p>
+          <form class="reservation-form" id="reservation-form" novalidate>
+            <input type="url" id="reservation-input" inputmode="url" autocomplete="off" maxlength="500"
+              placeholder="(선택) 예약 링크를 입력해주세요. (예. https://m.booking.naver.com/1000129...)" value="${esc(reservationLink)}">
+            <button class="btn small" type="submit" id="reservation-submit">저장</button>
+          </form>
+          ${reservationLink ? `<a class="confirmed-summary-link reservation-link" href="${esc(reservationLink)}" target="_blank" rel="noopener noreferrer">예약 페이지 열기 ↗</a>` : ''}
+          <p class="hint reservation-msg" id="reservation-msg"></p>
+        </div>
       </div>`;
+    $('reservation-form').addEventListener('submit', submitReservationLink);
+    if (draft) {
+      const input = $('reservation-input');
+      input.value = draft.value;
+      input.focus();
+      input.setSelectionRange(draft.start, draft.end);
+    }
     return;
   }
 
@@ -866,6 +889,36 @@ async function deletePlace(placeId) {
   renderPlacePanel();
 }
 
+// 확정된 장소 카드의 예약 링크 저장. 빈 값으로 저장하면 링크가 지워진다.
+async function submitReservationLink(e) {
+  e.preventDefault();
+  const input = $('reservation-input');
+  const msg = $('reservation-msg');
+  const button = $('reservation-submit');
+  const link = input.value.trim();
+  msg.textContent = '';
+  msg.classList.remove('validation-invalid', 'validation-valid');
+  button.disabled = true;
+  try {
+    const res = await fetch(`/api/events/${eventId}/reservation-link`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ link }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || '예약 링크를 저장하지 못했어요.');
+    eventData = data;
+    renderPlaceRanking();
+    const saved = $('reservation-msg');
+    saved.textContent = link ? '예약 링크를 저장했어요.' : '예약 링크를 지웠어요.';
+    saved.classList.add('validation-valid');
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.classList.add('validation-invalid');
+    button.disabled = false;
+  }
+}
+
 function renderConfirmedPlace() {
   const place = confirmedPlace();
   const banner = $('confirmed-place');
@@ -876,6 +929,7 @@ function renderConfirmedPlace() {
     <p class="confirmed-place-name">${esc(place.name)}</p>
     <p class="confirmed-place-address">${esc(place.roadAddress || place.address || '')}</p>
     <a class="confirmed-place-link" href="${esc(placeMapLink(place))}" target="_blank" rel="noopener noreferrer">지도에서 보기 ↗</a>
+    ${place.reservationLink ? `<a class="confirmed-place-link reservation-link" href="${esc(place.reservationLink)}" target="_blank" rel="noopener noreferrer">예약 페이지 열기 ↗</a>` : ''}
     ${place.link ? '' : '<p class="confirmed-place-warn">장소 공유 링크가 없어 <b>검색</b>으로 연결돼요. 장소를 다시 확정하며 링크를 넣으면 공유할 때도 함께 전달됩니다.</p>'}`;
 }
 

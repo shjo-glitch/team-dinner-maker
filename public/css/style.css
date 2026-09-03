@@ -287,6 +287,16 @@ input:focus-visible { border-color: var(--accent); background: #fffefa; box-shad
 .confirmed-summary-sub { margin-top: 5px; color: var(--ink-soft); font-size: 13px; word-break: keep-all; }
 .confirmed-summary-link { display: inline-block; margin-top: 10px; color: var(--success); font-size: 12px; font-weight: 700; text-decoration: none; }
 .confirmed-summary-link:hover { text-decoration: underline; }
+/* 확정된 장소 카드 — 예약 앱(웹) 링크 입력 */
+.reservation-field { margin-top: 14px; padding-top: 12px; border-top: 1px dashed rgba(40, 98, 71, 0.3); }
+.reservation-title { color: var(--ink); font-size: 13px; font-weight: 700; }
+.reservation-form { display: flex; gap: 8px; align-items: stretch; margin-top: 8px; }
+.reservation-form input[type='url'] { flex: 1 1 auto; min-width: 0; min-height: 40px; padding: 8px 11px; font-size: 13px; }
+.reservation-form input[type='url']::placeholder { color: #9a8f83; font-size: 12px; }
+.reservation-form .btn.small { flex: 0 0 auto; min-height: 40px; }
+.reservation-msg { margin-top: 6px; min-height: 0; }
+.reservation-msg:empty { display: none; }
+.confirmed-place-link.reservation-link { margin-left: 14px; }
 .place-rank-row { grid-template-columns: 52px minmax(0, 1fr) auto; color: inherit; cursor: pointer; text-decoration: none; transition: border-color 150ms ease, background 150ms ease, transform 150ms ease; }
 .place-rank-row:hover { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-1px); }
 .place-rank-map { color: var(--ink-soft); font-size: 11px; font-weight: 700; white-space: nowrap; }

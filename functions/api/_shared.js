@@ -186,6 +186,22 @@ export async function getHolidaysForRange(env, startDate, endDate) {
   }
 }
 
+// 예약 앱(웹) 링크. 예약 서비스는 종류가 많아 도메인을 제한하지 않고 http(s) URL 형식만 검사한다.
+// (서버가 이 주소로 요청을 보내지는 않으며, 화면에는 href 로만 노출된다)
+export function normalizeReservationLink(raw) {
+  const value = String(raw || '').trim();
+  if (!value) return { link: '' };
+  if (value.length > 500) return { error: '예약 링크가 너무 깁니다.' };
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return { error: '예약 링크 형식이 올바르지 않습니다. (https://... 형태)' };
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return { error: '예약 링크는 http(s) 주소만 등록할 수 있어요.' };
+  return { link: parsed.toString() };
+}
+
 // ---- 진행 단계 ----
 // 1 새 일정 만들기 → 2 일정 투표 → 3 일정 확정하고 장소 정하기 → 4 장소 확정하고 공유하기
 export function isScheduleConfirmed(event) {
