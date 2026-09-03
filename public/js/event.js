@@ -309,6 +309,19 @@ function renderPlaceRanking() {
       ? { value: typingInput.value, start: typingInput.selectionStart, end: typingInput.selectionEnd }
       : null;
     const reservationLink = confirmed.reservationLink || '';
+    // 링크가 저장돼 있으면 입력칸 대신 '예약 페이지 열기 + 수정' 버튼 행을 보여주고,
+    // '수정'을 누르거나 아직 링크가 없으면 '입력칸 + 저장' 행을 보여준다.
+    const showEditor = !reservationLink || reservationEditing;
+    const reservationRow = showEditor
+      ? `<form class="reservation-form" id="reservation-form" novalidate>
+            <input type="url" id="reservation-input" inputmode="url" autocomplete="off" maxlength="500"
+              placeholder="(선택) 예약 링크를 입력해주세요. (예. https://m.booking.naver.com/1000129...)" value="${esc(reservationLink)}">
+            <button class="btn small" type="submit" id="reservation-submit">저장</button>
+          </form>`
+      : `<div class="reservation-form reservation-actions">
+            <a class="btn small" href="${esc(reservationLink)}" target="_blank" rel="noopener noreferrer">예약 페이지 열기</a>
+            <button class="btn small ghost" type="button" id="reservation-edit">수정</button>
+          </div>`;
     listEl.innerHTML = `
       <div class="confirmed-summary">
         <p class="confirmed-summary-main">${esc(confirmed.name)}</p>
@@ -316,21 +329,33 @@ function renderPlaceRanking() {
         <a class="confirmed-summary-link" href="${esc(placeMapLink(confirmed))}" target="_blank" rel="noopener noreferrer">네이버 지도에서 보기 ↗</a>
         <div class="reservation-field">
           <p class="reservation-title">예약 앱(웹) 링크</p>
-          <form class="reservation-form" id="reservation-form" novalidate>
-            <input type="url" id="reservation-input" inputmode="url" autocomplete="off" maxlength="500"
-              placeholder="(선택) 예약 링크를 입력해주세요. (예. https://m.booking.naver.com/1000129...)" value="${esc(reservationLink)}">
-            <button class="btn small" type="submit" id="reservation-submit">저장</button>
-          </form>
-          ${reservationLink ? `<a class="confirmed-summary-link reservation-link" href="${esc(reservationLink)}" target="_blank" rel="noopener noreferrer">예약 페이지 열기 ↗</a>` : ''}
+          ${reservationRow}
           <p class="hint reservation-msg" id="reservation-msg"></p>
         </div>
       </div>`;
-    $('reservation-form').addEventListener('submit', submitReservationLink);
-    if (draft) {
+    if (showEditor) {
+      $('reservation-form').addEventListener('submit', submitReservationLink);
       const input = $('reservation-input');
-      input.value = draft.value;
-      input.focus();
-      input.setSelectionRange(draft.start, draft.end);
+      // 수정 중 Esc 를 누르면 저장하지 않고 버튼 행으로 되돌아간다. (저장된 링크가 있을 때만)
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && reservationLink) {
+          reservationEditing = false;
+          renderPlaceRanking();
+        }
+      });
+      if (draft) {
+        input.value = draft.value;
+        input.focus();
+        input.setSelectionRange(draft.start, draft.end);
+      } else if (reservationEditing) {
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      }
+    } else {
+      $('reservation-edit').addEventListener('click', () => {
+        reservationEditing = true;
+        renderPlaceRanking();
+      });
     }
     return;
   }
@@ -889,6 +914,9 @@ async function deletePlace(placeId) {
   renderPlacePanel();
 }
 
+// 확정된 장소 카드의 예약 링크 입력칸이 열려 있는지. (저장된 링크가 있을 때 '수정'을 누르면 true)
+let reservationEditing = false;
+
 // 확정된 장소 카드의 예약 링크 저장. 빈 값으로 저장하면 링크가 지워진다.
 async function submitReservationLink(e) {
   e.preventDefault();
@@ -908,6 +936,7 @@ async function submitReservationLink(e) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || '예약 링크를 저장하지 못했어요.');
     eventData = data;
+    reservationEditing = false;
     renderPlaceRanking();
     const saved = $('reservation-msg');
     saved.textContent = link ? '예약 링크를 저장했어요.' : '예약 링크를 지웠어요.';
