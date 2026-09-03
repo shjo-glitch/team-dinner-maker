@@ -264,10 +264,12 @@ input:focus-visible { border-color: var(--accent); background: #fffefa; box-shad
 .share-launcher-label { color: var(--ink); font-size: 13px; font-weight: 700; }
 .share-preview-label { margin: 15px 0 6px; color: var(--ink-soft); font-size: 11px; font-weight: 700; }
 
-.link-preview { padding: 12px 14px; border: 1px solid var(--line); border-left: 3px solid var(--sat); border-radius: 3px; background: var(--surface); }
-.link-preview-title { color: var(--ink); font-size: 14px; font-weight: 700; line-height: 1.4; word-break: keep-all; }
-.link-preview-desc { margin-top: 4px; color: var(--ink-soft); font-size: 12px; line-height: 1.55; word-break: keep-all; }
-.link-preview-host { margin-top: 6px; color: #958b80; font-size: 11px; }
+.link-preview { display: grid; gap: 10px; }
+.share-msg-preview { padding: 12px 14px; border: 1px solid var(--line); border-left: 3px solid var(--sat); border-radius: 3px; background: var(--surface); }
+.share-msg-title { color: var(--ink); font-size: 14px; font-weight: 700; line-height: 1.4; word-break: keep-all; }
+.share-msg-preview .teams-preview-row { grid-template-columns: 104px minmax(0, 1fr); }
+.share-msg-preview .teams-preview-row b { font-weight: 500; overflow-wrap: anywhere; }
+.link-preview > .hint { margin-top: 0; }
 
 .share-advanced { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
 .share-advanced > summary { cursor: pointer; list-style: none; }
@@ -382,14 +384,14 @@ input:focus-visible { border-color: var(--accent); background: #fffefa; box-shad
 
 /* 웹후크 최상위 필드 미리보기 */
 .webhook-fields { display: grid; gap: 5px; padding: 12px 13px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface-warm); }
-.webhook-field { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 8px; align-items: baseline; font-size: 12px; }
+.webhook-field { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 8px; align-items: baseline; font-size: 12px; }
 .webhook-field code { color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
 .webhook-field span { color: var(--ink); word-break: break-all; }
 .webhook-fields .hint { margin-top: 4px; }
 .webhook-fields code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
 @media (max-width: 560px) {
-  .wrap { padding: 31px 15px 76px; }.landing-head { padding: 16px 0 30px; }.event-site-head { padding-bottom: 24px; }.card { padding: 24px 18px; border-radius: 3px 3px 17px 3px; }.theme-picker { gap: 5px; }.theme-picker .theme-opt { min-height: 94px; padding-inline: 3px; font-size: 11px; }.theme-picker .theme-opt small { font-size: 9px; }.cal-cell { min-height: 58px; padding-top: 5px; }.cal-day { width: 31px; height: 31px; font-size: 12px; }.cal-holiday { font-size: 7px; }.cal-count { font-size: 8px; }.cal-grid { gap: 1px; }.float-save { bottom: 10px; width: calc(100% - 20px); }.float-save .btn { padding-inline: 16px; }.event-head { padding-bottom: 22px; }.candidate-ranking { padding-block: 23px 20px; }.candidate-ranking-row { grid-template-columns: 47px minmax(0, 1fr); gap: 10px; }.candidate-rank-dates { font-size: 18px; }.cancel-dialog-form { padding: 26px 21px 22px; }.cancel-dialog-actions { flex-direction: column-reverse; }.cancel-dialog-actions .btn { width: 100%; }.tabs button { font-size: 11px; padding-inline: 2px; }.place-map { height: 260px; }.place-card { grid-template-columns: 26px minmax(0, 1fr); }.place-no { width: 26px; height: 26px; font-size: 11px; }.place-actions { grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: flex-end; gap: 12px; }.place-name { font-size: 17px; }.steps li { font-size: 10px; padding: 4px 9px 4px 5px; }.webhook-field { grid-template-columns: 68px minmax(0, 1fr); }.place-card-footer { flex-direction: column; }.share-btn { min-height: 38px; }.toggle-btn { font-size: 11px; padding: 7px 11px 7px 8px; }.teams-dialog { max-height: 92vh; }.teams-dialog .cancel-dialog-form { max-height: 92vh; }.teams-preview-row { grid-template-columns: 66px minmax(0, 1fr); }.success-dialog-content { padding: 27px 21px; }
+  .wrap { padding: 31px 15px 76px; }.landing-head { padding: 16px 0 30px; }.event-site-head { padding-bottom: 24px; }.card { padding: 24px 18px; border-radius: 3px 3px 17px 3px; }.theme-picker { gap: 5px; }.theme-picker .theme-opt { min-height: 94px; padding-inline: 3px; font-size: 11px; }.theme-picker .theme-opt small { font-size: 9px; }.cal-cell { min-height: 58px; padding-top: 5px; }.cal-day { width: 31px; height: 31px; font-size: 12px; }.cal-holiday { font-size: 7px; }.cal-count { font-size: 8px; }.cal-grid { gap: 1px; }.float-save { bottom: 10px; width: calc(100% - 20px); }.float-save .btn { padding-inline: 16px; }.event-head { padding-bottom: 22px; }.candidate-ranking { padding-block: 23px 20px; }.candidate-ranking-row { grid-template-columns: 47px minmax(0, 1fr); gap: 10px; }.candidate-rank-dates { font-size: 18px; }.cancel-dialog-form { padding: 26px 21px 22px; }.cancel-dialog-actions { flex-direction: column-reverse; }.cancel-dialog-actions .btn { width: 100%; }.tabs button { font-size: 11px; padding-inline: 2px; }.place-map { height: 260px; }.place-card { grid-template-columns: 26px minmax(0, 1fr); }.place-no { width: 26px; height: 26px; font-size: 11px; }.place-actions { grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: flex-end; gap: 12px; }.place-name { font-size: 17px; }.steps li { font-size: 10px; padding: 4px 9px 4px 5px; }.webhook-field { grid-template-columns: 96px minmax(0, 1fr); }.place-card-footer { flex-direction: column; }.share-btn { min-height: 38px; }.toggle-btn { font-size: 11px; padding: 7px 11px 7px 8px; }.teams-dialog { max-height: 92vh; }.teams-dialog .cancel-dialog-form { max-height: 92vh; }.teams-preview-row { grid-template-columns: 66px minmax(0, 1fr); }.success-dialog-content { padding: 27px 21px; }
 }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }.top-pick-spark { animation: none; } }

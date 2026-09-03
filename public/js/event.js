@@ -1123,6 +1123,7 @@ function renderTeamsPreview() {
     rows.push(previewRow('장소', place.name));
     if (place.roadAddress || place.address) rows.push(previewRow('주소', place.roadAddress || place.address));
     if (place.link) rows.push(previewRow('장소 공유 링크', place.link));
+    if (place.reservationLink) rows.push(previewRow('예약 링크', place.reservationLink));
   }
   rows.push(previewRow('참여 인원', `${attendeeCount()}명 / 총원 ${eventData.totalCount}명`));
 
@@ -1131,7 +1132,7 @@ function renderTeamsPreview() {
     <p class="teams-preview-meta">${esc(formatShortDate(eventData.confirmedDate))} ${esc(formatMeetTime(eventData.confirmedTime))}</p>
     ${note ? `<p class="teams-preview-note">${esc(note)}</p>` : ''}
     ${rows.join('')}
-    <p class="teams-preview-action">${place && place.link ? '지도에서 보기 · ' : ''}약속 페이지 열기 →</p>`;
+    <p class="teams-preview-action">${place && place.link ? '지도에서 보기 · ' : ''}${place && place.reservationLink ? '예약하기 · ' : ''}약속 페이지 열기 →</p>`;
 
   renderWebhookFields();
 }
@@ -1147,24 +1148,10 @@ function renderWebhookFields() {
     ['web_link', location.href],
   ];
   if (place && place.link) fields.push(['url', place.link]);
+  if (place && place.reservationLink) fields.push(['reservation_link', place.reservationLink]);
   $('webhook-fields').innerHTML =
     fields.map(([key, value]) => `<div class="webhook-field"><code>${key}</code><span>${esc(value)}</span></div>`).join('') +
     (place && place.link ? '' : '<p class="hint">장소 공유 링크가 없어 <code>url</code> 필드는 <b>보내지 않습니다.</b> 장소를 다시 확정하며 링크를 넣으면 포함돼요.</p>');
-}
-
-// OG 설명문·공유 문구에 쓰는 요약. (서버 buildEventMeta 와 같은 규칙)
-function shareSummaryParts() {
-  const parts = [];
-  if (isScheduleConfirmed()) {
-    parts.push(`${formatShortDate(eventData.confirmedDate)} ${formatMeetTime(eventData.confirmedTime)}`);
-    const place = confirmedPlace();
-    if (place) parts.push(place.name);
-  } else {
-    const dateRanks = topDateRanks(1);
-    parts.push(dateRanks.length ? `날짜 1위 ${dateRanks[0].dates.join(', ')} (${dateRanks[0].count}명)` : '아직 등록된 일정이 없어요');
-  }
-  parts.push(`참여 ${attendeeCount()}명 / 총원 ${eventData.totalCount}명`);
-  return parts;
 }
 
 // 공유 문구(카카오톡 텍스트 · Teams 공유창 미리채움 공용).
@@ -1178,17 +1165,36 @@ function buildShareMessage() {
     `모이는 곳        : ${place ? place.name : ''}`,
   ];
   if (place && place.link) lines.push(`장소 공유 링크   : ${place.link}`);
+  if (place && place.reservationLink) lines.push(`예약 링크        : ${place.reservationLink}`);
   lines.push(`모임 인원        : 참여 ${attendeeCount()}명 / 총원 ${eventData.totalCount}명`);
   lines.push(`웹에서 자세히보기: ${location.href}`);
   return lines.join('\r\n');
 }
 
-// 채널에 붙는 링크 카드는 서버가 넣어준 OG 태그로 만들어진다. 같은 내용을 화면에서도 보여준다.
+// '이렇게 보여요': 실제로 보내지는 공유 문구를 한 장의 카드로 보여준다.
+// (장소 공유 링크·예약 링크 같은 선택 입력은 넣은 경우에만 줄이 생긴다)
+// 메신저가 링크에 자동으로 붙이는 OG 미리보기 카드는 내용이 겹쳐 따로 그리지 않는다.
 function renderLinkPreview() {
+  const place = confirmedPlace();
+  const rows = [
+    previewRow('모임 날짜/시간', `${formatShortDate(eventData.confirmedDate)} ${formatMeetTime(eventData.confirmedTime)}`),
+    previewRow('모이는 곳', place ? place.name : ''),
+  ];
+  if (place && place.link) rows.push(previewRow('장소 공유 링크', place.link));
+  if (place && place.reservationLink) rows.push(previewRow('예약 링크', place.reservationLink));
+  rows.push(previewRow('모임 인원', `참여 ${attendeeCount()}명 / 총원 ${eventData.totalCount}명`));
+  rows.push(previewRow('웹에서 자세히보기', location.href));
+  // 비어 있는 선택 입력은 어디서 넣는지 함께 안내한다.
+  const missing = [];
+  if (!place || !place.link) missing.push("장소 공유 링크(장소 확정 때 '장소 공유 링크' 칸)");
+  if (!place || !place.reservationLink) missing.push("예약 링크(결과 보기 탭 확정된 장소 카드의 '예약 앱(웹) 링크')");
+
   $('link-preview').innerHTML = `
-    <p class="link-preview-title">🍷 ${esc(eventData.title)}</p>
-    <p class="link-preview-desc">${esc(shareSummaryParts().join(' · '))}</p>
-    <p class="link-preview-host">${esc(location.host)}</p>`;
+    <div class="share-msg-preview">
+      <p class="share-msg-title">🍷 ${esc(eventData.title)}</p>
+      ${rows.join('')}
+    </div>
+    ${missing.length ? `<p class="hint">아직 없어서 빠지는 항목: ${esc(missing.join(' · '))}. 넣어두면 공유 문구에 함께 전달돼요.</p>` : ''}`;
 }
 
 // Share to Teams 런처는 외부 스크립트라 차단되거나 늦게 로드될 수 있다.

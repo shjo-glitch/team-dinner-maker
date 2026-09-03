@@ -473,12 +473,14 @@ export function buildTeamsCard(event, shareUrl, note) {
     facts.push({ title: '장소', value: place.name });
     if (place.roadAddress || place.address) facts.push({ title: '주소', value: place.roadAddress || place.address });
     if (mapUrl) facts.push({ title: '장소 공유 링크', value: mapUrl });
+    if (place.reservationLink) facts.push({ title: '예약 링크', value: place.reservationLink });
   }
   facts.push({ title: '참여 인원', value: `${attendeeCount(event)}명 / 총원 ${event.totalCount}명` });
   body.push({ type: 'FactSet', facts, spacing: 'Medium' });
 
   const actions = [];
   if (mapUrl) actions.push({ type: 'Action.OpenUrl', title: '지도에서 보기', url: mapUrl });
+  if (place && place.reservationLink) actions.push({ type: 'Action.OpenUrl', title: '예약하기', url: place.reservationLink });
   actions.push({ type: 'Action.OpenUrl', title: '약속 페이지 열기', url: shareUrl });
 
   return {
@@ -513,6 +515,8 @@ export function buildWebhookPayload(event, shareUrl, note) {
     // 지도 링크는 사용자가 붙여넣은 값만 보낸다. 없으면 필드 자체를 빼서
     // 워크플로가 검색 URL을 실제 POI 링크로 오해하지 않게 한다.
     ...(link ? { url: link } : {}),
+    // 예약 앱(웹) 링크도 넣은 경우에만 싣는다.
+    ...(place && place.reservationLink ? { reservation_link: place.reservationLink } : {}),
     ...buildTeamsCard(event, shareUrl, note),
   };
 }
