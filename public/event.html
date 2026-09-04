@@ -167,7 +167,19 @@
             </div>
             <p class="hint" id="place-search-hint"><b>지역 + 종류</b>(예: 서초역 맛집, 판교 카페, 강남 돈까스)로 검색하면 그 기준점 1.5km 안에서 관련도·거리·종류를 따져 <b>상위 15곳</b>을 골라 드려요. 상호를 그대로 넣어도 찾아요.</p>
           </div>
-          <div class="place-results" id="place-results"></div>
+          <!-- 검색 결과: 요약 한 줄 + 5개씩 페이지로 나눈 가로 스크롤 캐러셀 (드래그/스와이프, 좌우 화살표) -->
+          <div class="place-results-wrap" id="place-results-wrap" hidden>
+            <p class="place-results-summary" id="place-results-summary"></p>
+            <div class="place-carousel">
+              <div class="place-results" id="place-results" tabindex="0" aria-label="검색 결과"></div>
+              <!-- 데스크톱: 화살표가 리스트 좌우 바깥에 떠 있음 / 모바일: 아래 줄 양끝 -->
+              <div class="place-results-nav">
+                <button type="button" class="carousel-arrow prev" id="place-results-prev" aria-label="이전 페이지" hidden>‹</button>
+                <p class="place-results-pages" id="place-results-pages" aria-live="polite"></p>
+                <button type="button" class="carousel-arrow next" id="place-results-next" aria-label="다음 페이지" hidden>›</button>
+              </div>
+            </div>
+          </div>
           <div class="field">
             <label for="place-link">장소 공유 링크 (선택)</label>
             <input type="text" id="place-link" placeholder="https://naver.me/... 또는 https://kko.to/..." maxlength="300" />

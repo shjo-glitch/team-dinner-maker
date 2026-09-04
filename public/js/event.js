@@ -85,6 +85,9 @@ let placeMapReady = false;
 let activeVoterName = null;
 let searchResults = [];
 let selectedResultIndex = null;
+let searchSummaryText = ''; // 결과 리스트 바로 위에 붙는 요약 한 줄
+let searchPage = 0; // 캐러셀 현재 페이지 (0부터)
+const SEARCH_PAGE_SIZE = 5;
 
 // 투표자 이름은 브라우저마다 다르므로 약속별로 기억해 둔다.
 const VOTER_STORAGE_KEY = `dinner-voter:${eventId}`;
@@ -806,27 +809,131 @@ function searchSummary(data) {
   return `상호 검색 ${count}곳`;
 }
 
+function searchResultRow(item, index) {
+  const active = selectedResultIndex === index;
+  // <button> 안에는 <a> 를 넣을 수 없어 선택 버튼과 지도 링크를 나란히 둔다.
+  return `
+    <div class="place-result${active ? ' selected' : ''}" data-result-row="${index}">
+      <button type="button" class="place-result-pick" data-result="${index}" aria-pressed="${active}">
+        <span class="place-result-mark" aria-hidden="true">${active ? '●' : '○'}</span>
+        <span class="place-result-body">
+          <b>${esc(item.name)}${Number.isFinite(item.distance) ? `<span class="place-result-distance">${esc(formatDistance(item.distance))}</span>` : ''}</b>
+          <small>${esc(item.roadAddress || item.address)}</small>
+          ${item.category ? `<small class="place-result-category">${esc(item.category)}</small>` : ''}
+        </span>
+      </button>
+      <a class="place-link" href="${esc(item.kakaoUrl || placeMapLink(item))}" target="_blank" rel="noopener noreferrer">지도 ↗</a>
+    </div>`;
+}
+
+function searchPageCount() {
+  return Math.ceil(searchResults.length / SEARCH_PAGE_SIZE);
+}
+
+// 결과 전체를 5개씩 페이지로 나눠 가로 스크롤 캐러셀로 그린다. (터치·마우스 드래그 + 좌우 화살표)
 function renderSearchResults() {
-  const wrap = $('place-results');
-  wrap.innerHTML = searchResults
-    .map((item, index) => {
-      const active = selectedResultIndex === index;
-      // <button> 안에는 <a> 를 넣을 수 없어 선택 버튼과 지도 링크를 나란히 둔다.
-      return `
-        <div class="place-result${active ? ' selected' : ''}">
-          <button type="button" class="place-result-pick" data-result="${index}" aria-pressed="${active}">
-            <span class="place-result-mark" aria-hidden="true">${active ? '●' : '○'}</span>
-            <span class="place-result-body">
-              <b>${esc(item.name)}${Number.isFinite(item.distance) ? `<span class="place-result-distance">${esc(formatDistance(item.distance))}</span>` : ''}</b>
-              <small>${esc(item.roadAddress || item.address)}</small>
-              ${item.category ? `<small class="place-result-category">${esc(item.category)}</small>` : ''}
-            </span>
-          </button>
-          <a class="place-link" href="${esc(item.kakaoUrl || placeMapLink(item))}" target="_blank" rel="noopener noreferrer">지도 ↗</a>
-        </div>`;
-    })
-    .join('');
+  const wrap = $('place-results-wrap');
+  const list = $('place-results');
+  const pageCount = searchPageCount();
+  wrap.hidden = pageCount === 0;
+  $('place-results-summary').textContent = searchSummaryText;
+  list.innerHTML = Array.from({ length: pageCount }, (_, page) => {
+    const start = page * SEARCH_PAGE_SIZE;
+    const rows = searchResults.slice(start, start + SEARCH_PAGE_SIZE).map((item, offset) => searchResultRow(item, start + offset));
+    return `<div class="place-page" data-page="${page}">${rows.join('')}</div>`;
+  }).join('');
+  searchPage = Math.min(searchPage, Math.max(0, pageCount - 1));
+  list.scrollTo({ left: searchPage * list.clientWidth, behavior: 'instant' });
+  updateSearchPager();
   $('place-add-btn').disabled = selectedResultIndex === null;
+}
+
+// 선택만 바뀔 때는 다시 그리지 않고 클래스만 갱신한다. (스크롤 위치 유지)
+function refreshSearchSelection() {
+  document.querySelectorAll('#place-results [data-result-row]').forEach((row) => {
+    const index = Number(row.dataset.resultRow);
+    const active = selectedResultIndex === index;
+    row.classList.toggle('selected', active);
+    const pick = row.querySelector('[data-result]');
+    pick.setAttribute('aria-pressed', String(active));
+    pick.querySelector('.place-result-mark').textContent = active ? '●' : '○';
+  });
+  $('place-add-btn').disabled = selectedResultIndex === null;
+}
+
+// 화살표 노출(첫/마지막 페이지에서는 숨김)과 "n / m" 표시.
+function updateSearchPager() {
+  const pageCount = searchPageCount();
+  $('place-results-prev').hidden = pageCount <= 1 || searchPage <= 0;
+  $('place-results-next').hidden = pageCount <= 1 || searchPage >= pageCount - 1;
+  $('place-results-pages').textContent = pageCount > 1 ? `${searchPage + 1} / ${pageCount} 페이지 · 옆으로 밀어 더 보기` : '';
+}
+
+function goToSearchPage(page) {
+  const list = $('place-results');
+  const target = Math.max(0, Math.min(searchPageCount() - 1, page));
+  // 화살표·키보드로 넘길 때는 스크롤 이벤트를 기다리지 않고 바로 표시를 갱신한다.
+  searchPage = target;
+  updateSearchPager();
+  list.scrollTo({ left: target * list.clientWidth, behavior: 'smooth' });
+}
+
+// 마우스 드래그로도 넘길 수 있게 한다. (터치는 브라우저 기본 스크롤 + scroll-snap 이 처리)
+function bindSearchCarousel() {
+  const list = $('place-results');
+  let dragging = null;
+  list.addEventListener('scroll', () => {
+    const page = Math.round(list.scrollLeft / Math.max(1, list.clientWidth));
+    if (page !== searchPage) {
+      searchPage = page;
+      updateSearchPager();
+    }
+  });
+  list.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    dragging = { startX: e.clientX, startLeft: list.scrollLeft, moved: false };
+    list.classList.add('dragging');
+  });
+  list.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - dragging.startX;
+    if (Math.abs(dx) > 5) dragging.moved = true;
+    list.scrollLeft = dragging.startLeft - dx;
+  });
+  const endDrag = () => {
+    if (!dragging) return;
+    const moved = dragging.moved;
+    dragging = null;
+    list.classList.remove('dragging');
+    // 손을 뗀 위치에서 가까운 페이지로 붙인다.
+    goToSearchPage(Math.round(list.scrollLeft / Math.max(1, list.clientWidth)));
+    if (moved) list.dataset.suppressClick = '1';
+  };
+  list.addEventListener('pointerup', endDrag);
+  list.addEventListener('pointerleave', endDrag);
+  list.addEventListener('click', (e) => {
+    // 드래그 끝에 발생하는 클릭은 선택으로 치지 않는다.
+    if (list.dataset.suppressClick) {
+      delete list.dataset.suppressClick;
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
+    const result = e.target.closest('[data-result]');
+    if (!result) return;
+    const index = Number(result.dataset.result);
+    selectedResultIndex = selectedResultIndex === index ? null : index;
+    refreshSearchSelection();
+  }, true);
+  list.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') goToSearchPage(searchPage - 1);
+    if (e.key === 'ArrowRight') goToSearchPage(searchPage + 1);
+  });
+  $('place-results-prev').addEventListener('click', () => goToSearchPage(searchPage - 1));
+  $('place-results-next').addEventListener('click', () => goToSearchPage(searchPage + 1));
+  window.addEventListener('resize', () => {
+    list.scrollTo({ left: searchPage * list.clientWidth, behavior: 'instant' });
+  });
 }
 
 async function searchPlaces() {
@@ -849,15 +956,16 @@ async function searchPlaces() {
     if (!res.ok) throw new Error(data.error || '장소를 검색하지 못했어요.');
     searchResults = data.items || [];
     selectedResultIndex = searchResults.length === 1 ? 0 : null;
+    searchSummaryText = searchSummary(data);
+    searchPage = 0;
     renderSearchResults();
     if (searchResults.length === 0) {
       errorEl.textContent = '검색 결과가 없어요. \'지역 + 종류\'(예: 서초역 맛집)나 상호로 다시 검색해 보세요.';
-    } else {
-      $('place-info').textContent = searchSummary(data);
     }
   } catch (err) {
     searchResults = [];
     selectedResultIndex = null;
+    searchSummaryText = '';
     renderSearchResults();
     errorEl.textContent = err.message;
   } finally {
@@ -887,6 +995,7 @@ async function addPlace() {
     eventData = data;
     searchResults = [];
     selectedResultIndex = null;
+    searchSummaryText = '';
     $('place-query').value = '';
     $('place-link').value = '';
     renderSearchResults();
@@ -1736,14 +1845,8 @@ async function init() {
   });
   $('place-add-btn').addEventListener('click', addPlace);
 
-  // 검색 결과: 한 번 더 누르면 선택 해제
-  $('place-results').addEventListener('click', (e) => {
-    const result = e.target.closest('[data-result]');
-    if (!result) return;
-    const index = Number(result.dataset.result);
-    selectedResultIndex = selectedResultIndex === index ? null : index;
-    renderSearchResults();
-  });
+  // 검색 결과 캐러셀 (선택 토글·드래그·화살표·키보드)
+  bindSearchCarousel();
 
   $('voter-toast-btn').addEventListener('click', goToVoterPicker);
   $('place-voters').addEventListener('click', (e) => {
