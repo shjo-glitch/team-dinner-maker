@@ -899,9 +899,18 @@ function hideVoterToast() {
   $('voter-toast').hidden = true;
 }
 
+// 토스트를 누르면 '어디서 볼까?' 카드 머리(제목·확정 장소 배너)까지 보이도록 올린다.
+// 화면이 작아 참여자 칩이 아래로 밀리면, 칩이 보이는 만큼만 내려서 맞춘다.
+const VOTER_SCROLL_MARGIN = 24;
+
 function goToVoterPicker() {
   hideVoterToast();
-  $('place-voters').closest('.voter-field').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const field = $('place-voters').closest('.voter-field');
+  const card = field.closest('.venue-head') || field;
+  let top = window.scrollY + card.getBoundingClientRect().top - VOTER_SCROLL_MARGIN;
+  const fieldBottom = window.scrollY + field.getBoundingClientRect().bottom + VOTER_SCROLL_MARGIN;
+  if (fieldBottom - top > window.innerHeight) top = fieldBottom - window.innerHeight;
+  window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
   const firstChip = $('place-voters').querySelector('button, [tabindex]');
   if (firstChip) firstChip.focus({ preventScroll: true });
 }
