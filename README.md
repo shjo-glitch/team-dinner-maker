@@ -37,7 +37,7 @@
 | 일정 확정 | 결과 보기 탭 **'회식 날 후보 순위' 카드 우상단의 일정 확정하기 토글**(OFF→ON)에서 **만나는 날짜**(1위 후보 날짜만 선택 가능)와 **시간**, 관리 비밀번호를 입력합니다. ON 상태에서 다시 누르면(**일정 다시 정하기**) 확정이 풀립니다. 장소 확정과는 **독립**이라 서로 영향을 주지 않고, 날짜·시간 값은 보존되어 재확정 때 채워집니다. |
 | 장소 확정 | **일정 확정 전에도** '어디서 볼까?'에서 후보지 등록·투표·확정이 가능합니다(병행). 후보지 카드의 **이 곳으로 확정하기** 또는 결과 보기 탭 **'회식 장소 후보 순위' 카드 우상단의 장소 확정하기 토글**(득표순 후보 선택)로 정하고, **장소 공유 링크(선택)** — 네이버지도·카카오맵·구글 지도 등 지도 앱의 공유 링크 — 를 넣으면 일정을 공유할 때 정확한 POI 링크가 실립니다. ON 상태에서 다시 누르면(**장소 다시 정하기**) 확정이 풀리고, 확정된 후보지를 삭제해도 풀립니다. |
 | 어디서 볼까? | 네이버 지도 위에 후보지를 핀으로 보여 줍니다. 득표 1위 후보는 목록 카드와 지도 핀이 **함께 골드로 강조**되고, 핀을 누르면 해당 카드로 이동합니다. |
-| 후보지 등록 | 장소 이름을 검색하면 **네이버 지역검색**으로 최대 5곳을 찾아 이름·분류·주소·좌표를 자동 입력합니다. `naver.me` POI 링크를 함께 넣으면 후보 카드에서 그 링크로 열리고, 비워두면 이름과 주소로 지도 검색 링크를 만들어 둡니다. (약속당 최대 12곳) |
+| 후보지 등록 | **카카오 장소검색**으로 찾습니다. '서초역 맛집'처럼 **지역 + 종류**로 검색하면 기준점(지하철역·동네) 좌표를 잡고 검색어 정확도 후보와 주변 후보를 모아 **관련도 50 · 거리 30 · 종류 적합도 15 · 품질/다양성 5** 점수로 재정렬해 상위 15곳을 보여줍니다. 상호를 그대로 넣으면 상호 검색이 됩니다. 이름·분류·주소·좌표는 자동 입력됩니다. `naver.me` POI 링크를 함께 넣으면 후보 카드에서 그 링크로 열리고, 비워두면 이름과 주소로 지도 검색 링크를 만들어 둡니다. (약속당 최대 12곳) |
 | 후보지 투표 | 참여자 이름을 고른 뒤 ♡를 눌러 투표합니다. 다시 누르면 취소되고, 목록은 **득표순**으로 정렬됩니다. 선택한 이름은 브라우저에 기억되며, 참여자가 삭제되면 그 사람의 투표도 함께 정리됩니다. |
 | 약속 파기 | 약속 페이지의 **약속 파기하기** 버튼으로 약속과 참여자 일정을 모두 삭제합니다. 관리 비밀번호 확인이 필요하고, **5회 틀리면 3분간 관리 기능(확정·파기)이 잠깁니다.** |
 | 자동 만료 | 1위 후보 날짜가 지나면 약속이 저장소에서 자동으로 삭제됩니다. 일정이 등록·수정·삭제될 때마다 만료일이 다시 계산됩니다. |
@@ -58,14 +58,16 @@ node server.js
 브라우저에서 `http://localhost:8788` 접속. 데이터는 `.data/` 디렉토리에 약속별 JSON 파일로 저장됩니다.
 포트를 바꾸려면 `PORT=3000 node server.js` 처럼 실행하세요.
 
-지도와 장소 검색을 쓰려면 프로젝트 루트에 `NAVER.env`(git에 커밋되지 않음)를 만들어 두세요.
+지도를 쓰려면 `NAVER.env`, 장소 검색·카카오 공유를 쓰려면 `KAKAO.env`(둘 다 git에 커밋되지 않음)를 프로젝트 루트에 만들어 두세요.
 없어도 서버는 뜨지만 '어디서 볼까?' 화면에서 지도와 검색이 비활성화됩니다.
 
 ```bash
 # NAVER.env
 NAVER_MAP_KEY_ID=<NCP Maps 인증 Key ID>       # 브라우저에 노출됨 (서비스 URL로 보호)
-NAVER_SEARCH_KEY_ID=<Naver API Hub Client ID>  # 서버 전용
-NAVER_SEARCH_KEY=<Naver API Hub Client Secret> # 서버 전용
+
+# KAKAO.env
+KAKAO_JS_KEY=<카카오 JavaScript 키>          # 브라우저에 노출됨 (JavaScript SDK 도메인으로 보호) — 카카오톡 공유
+KAKAO_REST_API_KEY=<카카오 REST API 키>     # 서버 전용 — 장소 검색. 카카오 개발자 콘솔에서 앱의 **카카오맵** 서비스를 활성화해야 동작
 ```
 
 ### 네이버 API 키 발급
@@ -98,8 +100,8 @@ CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=... \
 
 ```bash
 npx wrangler pages secret put NAVER_MAP_KEY_ID    --project-name=team-dinner-maker
-npx wrangler pages secret put NAVER_SEARCH_KEY_ID --project-name=team-dinner-maker
-npx wrangler pages secret put NAVER_SEARCH_KEY    --project-name=team-dinner-maker
+npx wrangler pages secret put KAKAO_JS_KEY       --project-name=team-dinner-maker
+npx wrangler pages secret put KAKAO_REST_API_KEY --project-name=team-dinner-maker
 ```
 
 `npx wrangler pages dev public`으로 로컬에서 Functions를 테스트할 때는 같은 값을 `.dev.vars`에 적어 두면 됩니다. (역시 git에 커밋되지 않습니다.)
@@ -368,8 +370,16 @@ Microsoft Graph로 채널에 글을 쓰려면 위임 권한 `ChannelMessage.Send
 
 ### 6-2. 후보지 등록하기
 
-**장소 이름 검색**에 상호를 넣고 검색하면 네이버 지역검색이 **최대 5곳**을 돌려줍니다.
-(한 번에 5개까지만 오므로, 원하는 곳이 안 보이면 `지역명 + 상호`로 좁혀 주세요.)
+**장소 이름 검색**은 카카오 장소검색을 씁니다. 두 가지 방식이 있어요.
+
+- **지역 + 종류** (예: `서초역 맛집`, `판교 카페`, `강남 돈까스`) — 검색어를 [기준점 + 카테고리]로 나눠 다음 순서로 처리합니다.
+  1. 기준점 좌표 확인: 지하철역(SW8)을 먼저 찾고, 없으면 동네·건물명으로 찾습니다.
+  2. 후보 수집: **A. 검색어 정확도**(키워드 검색, 기준점 반경 1.5km, accuracy 15건) + **B. 주변**(카테고리 검색, 거리순 15건)을 동시에 받아 중복을 뺍니다.
+  3. 자체 랭킹: `카카오 검색 순위 50%`(1위 50점, 순위마다 −3) + `거리 30%`(0~200m 30 / ~400m 27 / ~700m 22 / ~1km 15 / ~1.5km 8) + `종류 적합도 15%` + `품질·다양성 5%`. B에만 있는 곳은 관련도 15점으로 시작합니다.
+  4. 상위 **15곳**만 보여줍니다. 결과 위에 `'서초역 2호선' 기준 1.5km 안 음식점 15곳` 같은 요약이 붙고, 각 행에 기준점까지 거리가 표시됩니다.
+- **상호** (예: `을지로 노가리`, `고공 서초점`) — 종류 단어가 없으면 상호 검색으로 보고 카카오 정확도순 그대로 보여줍니다.
+
+종류 적합도는 `맛집`·`음식점`처럼 넓은 말이면 전체 음식점을 허용하고, `돈까스`·`초밥`·`파스타`·`고기집`·`카페`처럼 구체적이면 카카오 상세 분류(`음식점 > 일식 > 돈까스` 등)가 맞는 곳에 15점, 안 맞는 곳은 **−20점**으로 크게 밀어냅니다. 종류 단어 사전은 `functions/api/_place-search.js`의 `CATEGORY_RULES`에서 늘릴 수 있습니다.
 
 원하는 곳을 고르면 **이름 / 분류 / 주소 / 좌표**가 자동으로 채워집니다. **후보로 등록**을 누르면 목록과 지도에 추가됩니다.
 
@@ -382,7 +392,7 @@ Microsoft Graph로 채널에 글을 쓰려면 위임 권한 `ChannelMessage.Send
 - 한 약속에 후보지는 **최대 12곳**까지 등록할 수 있습니다.
 
 > 참고: `naver.me` 링크만으로는 장소 이름과 주소를 가져올 수 없습니다. 링크가 열리는 페이지에 장소 정보가 담겨 있지 않기 때문에,
-> 이름·주소·좌표는 네이버 지역검색 API로 채웁니다. 그래서 **검색으로 고르고, 링크는 선택 첨부**하는 방식입니다.
+> 이름·주소·좌표는 카카오 장소검색 API로 채웁니다. 그래서 **검색으로 고르고, 링크는 선택 첨부**하는 방식입니다. 검색 결과 행의 **지도 ↗**는 카카오 장소 페이지로 열립니다.
 
 ### 6-3. 투표하기
 
@@ -462,14 +472,16 @@ Microsoft Graph로 채널에 글을 쓰려면 위임 권한 `ChannelMessage.Send
 │   └── api/
 │       ├── _shared.js       #   공용 로직 (밑줄로 시작해 라우트로 노출되지 않음)
 │       ├── config.js        #   지도 키 등 공개 설정
-│       ├── places/search.js #   네이버 지역검색 프록시
+│       ├── _place-search.js #   카카오 장소검색 + 자체 랭킹 (server.js 도 같은 모듈 사용)
+│       ├── places/search.js #   장소 검색 엔드포인트
 │       └── events/...       #   약속 / 참여자 / 일정·장소 확정 / 후보지 / 팀즈 공유
 ├── scripts/
 │   └── capture-screenshots.mjs  # README 화면 캡처(images/) 재생성 스크립트
 ├── workers/
 │   └── expiry-scheduler.js  # 만료된 약속을 D1에서 지우는 Cron Worker
 ├── server.js                # 로컬 실행용 무의존성 서버 (.data/에 JSON 파일 저장)
-├── NAVER.env                # 네이버 API 키 (git 제외) — 로컬 server.js 가 읽음
+├── NAVER.env                # 네이버 지도 키 (git 제외) — 로컬 server.js 가 읽음
+├── KAKAO.env                # 카카오 JS 키·REST 키 (git 제외) — 로컬 server.js 가 읽음
 ├── HUDY.env                 # hudy 공휴일 API 키 (git 제외) — 로컬 server.js 가 읽음
 ├── .dev.vars                # 네이버 API 키 (git 제외) — wrangler pages dev 가 읽음
 ├── wrangler.toml            # Cloudflare Pages 설정 (D1 바인딩: DB)
@@ -510,11 +522,10 @@ UI를 수정했으면 이 스크립트를 다시 돌려 캡처를 맞춰 주세�
 | `PUT` | `/api/events/:id/places` | 후보지 투표 토글 `{placeId, name}` — `name`이 참여자가 아니면 `400` |
 | `DELETE` | `/api/events/:id/places?placeId=...` | 후보지 삭제 |
 | `POST` | `/api/events/:id/teams-export` | Teams 채널로 전송 `{webhookUrl, note?}` — **일정·장소 미확정 `409`**, 호스트 화이트리스트 밖 `400`, 쿨다운 `429`, 웹후크 실패 `502`. **URL은 서버에 저장하지 않음**(브라우저에만 캐시). 본문 최상위에 `date`/`time`/`poi_name`/`address`/`web_link`(+선택 `url`, `reservation_link`) 포함 |
-| `GET` | `/api/places/search?query=...` | 네이버 지역검색 프록시 → `{items: [{name, category, address, roadAddress, lat, lng}]}` (최대 5건). 키 미설정 시 `503` |
+| `GET` | `/api/places/search?query=...` | 카카오 장소검색 → `{items: [{name, category, address, roadAddress, lat, lng, distance, kakaoUrl, phone}], anchor: {name, lat, lng} \| null, mode: 'anchored' \| 'category' \| 'keyword', category?, radius?}` (최대 15건, 자체 랭킹). 키 미설정 시 `503`, 카카오맵 서비스 미활성화 등 권한 오류 `502` |
 | `GET` | `/api/config` | 공개 설정 → `{naverMapKeyId, placeSearchEnabled}` |
 
 `GET`/`PUT`/`DELETE` 응답의 약속 객체에서 `managePinHash`, `managePinSalt`, `deleteAuthFailures`는 항상 제외됩니다.
-**검색 시크릿(`NAVER_SEARCH_KEY`)은 어떤 응답에도 실리지 않습니다.** `/api/config`는 사용 가능 여부만 알려 줍니다.
+**검색 시크릿(`KAKAO_REST_API_KEY`)은 어떤 응답에도 실리지 않습니다.** `/api/config`는 사용 가능 여부만 알려 줍니다.
 
-지역검색 응답의 `mapx`/`mapy`는 WGS84 좌표를 10⁷배한 정수 문자열(예: `1270284390` → `127.028439`)로 오고,
-`title`에는 `<b>` 강조 태그가 섞여 오므로 서버에서 모두 정규화한 뒤 내려보냅니다.
+카카오 응답의 `x`/`y`는 WGS84 경도/위도 문자열, `distance`는 기준점 좌표를 넘겼을 때만 오는 미터 단위 문자열입니다. 서버에서 숫자로 바꾸고 `category_name`의 `>` 구분자를 `›`로 정리해 내려보냅니다.

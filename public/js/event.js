@@ -790,6 +790,22 @@ function focusPlaceCard(placeId) {
   setTimeout(() => card.classList.remove('focused'), 1600);
 }
 
+// 기준점에서의 거리 표기. (카카오가 미터 단위 문자열로 준다)
+function formatDistance(meters) {
+  return meters < 1000 ? `${Math.round(meters)}m` : `${(meters / 1000).toFixed(1)}km`;
+}
+
+// 검색 응답의 기준점·모드에 따라 결과 위에 붙는 한 줄 설명.
+function searchSummary(data) {
+  const count = (data.items || []).length;
+  if (count === 0) return '';
+  if (data.mode === 'anchored' && data.anchor) {
+    return `'${data.anchor.name}' 기준 ${(data.radius || 1500) / 1000}km 안 ${data.category || ''} ${count}곳 · 관련도·거리·종류 순`;
+  }
+  if (data.mode === 'category') return `${data.category || ''} ${count}곳 · 지역명을 함께 넣으면 기준점 주변으로 좁혀져요`;
+  return `상호 검색 ${count}곳`;
+}
+
 function renderSearchResults() {
   const wrap = $('place-results');
   wrap.innerHTML = searchResults
@@ -801,12 +817,12 @@ function renderSearchResults() {
           <button type="button" class="place-result-pick" data-result="${index}" aria-pressed="${active}">
             <span class="place-result-mark" aria-hidden="true">${active ? '●' : '○'}</span>
             <span class="place-result-body">
-              <b>${esc(item.name)}</b>
+              <b>${esc(item.name)}${Number.isFinite(item.distance) ? `<span class="place-result-distance">${esc(formatDistance(item.distance))}</span>` : ''}</b>
               <small>${esc(item.roadAddress || item.address)}</small>
               ${item.category ? `<small class="place-result-category">${esc(item.category)}</small>` : ''}
             </span>
           </button>
-          <a class="place-link" href="${esc(placeMapLink(item))}" target="_blank" rel="noopener noreferrer">지도 ↗</a>
+          <a class="place-link" href="${esc(item.kakaoUrl || placeMapLink(item))}" target="_blank" rel="noopener noreferrer">지도 ↗</a>
         </div>`;
     })
     .join('');
@@ -835,7 +851,9 @@ async function searchPlaces() {
     selectedResultIndex = searchResults.length === 1 ? 0 : null;
     renderSearchResults();
     if (searchResults.length === 0) {
-      errorEl.textContent = '검색 결과가 없어요. 지역명과 상호를 함께 넣어 다시 검색해 보세요.';
+      errorEl.textContent = '검색 결과가 없어요. \'지역 + 종류\'(예: 서초역 맛집)나 상호로 다시 검색해 보세요.';
+    } else {
+      $('place-info').textContent = searchSummary(data);
     }
   } catch (err) {
     searchResults = [];

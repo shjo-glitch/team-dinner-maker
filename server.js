@@ -9,7 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// NAVER.env(gitignore 대상)의 키를 process.env 로 올린다. 이미 설정된 환경변수가 우선한다.
+// NAVER.env/HUDY.env/KAKAO.env(gitignore 대상)의 키를 process.env 로 올린다. 이미 설정된 환경변수가 우선한다.
 function loadEnvFile(fileName) {
   try {
     for (const line of fs.readFileSync(path.join(__dirname, fileName), 'utf8').split('\n')) {
@@ -23,6 +23,13 @@ function loadEnvFile(fileName) {
 loadEnvFile('NAVER.env');
 loadEnvFile('HUDY.env');
 loadEnvFile('KAKAO.env');
+
+// 장소검색 랭킹 로직은 Pages Function 과 같은 ESM 모듈을 그대로 쓴다. (중복 구현 방지)
+let placeSearchModule = null;
+function loadPlaceSearch() {
+  if (!placeSearchModule) placeSearchModule = import(path.join(__dirname, 'functions', 'api', '_place-search.js'));
+  return placeSearchModule;
+}
 
 const PORT = process.env.PORT || 8788;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -90,9 +97,6 @@ const MAX_DELETE_ATTEMPTS = 5;
 const DELETE_LOCK_MS = 3 * 60 * 1000;
 const MANAGE_LOCK_MESSAGE = '관리 비밀번호를 5회 틀려 3분 동안 관리 기능이 잠겼어요.';
 const MAX_PLACES = 12;
-// 네이버 지역검색(NCP Naver API Hub). display 최대값은 5.
-const PLACE_SEARCH_ENDPOINT = 'https://naverapihub.apigw.ntruss.com/search/v1/local';
-const PLACE_SEARCH_DISPLAY = 5;
 const TEAMS_EXPORT_COOLDOWN_MS = 10 * 1000;
 const TEAMS_NOTE_MAX = 200;
 
@@ -386,65 +390,6 @@ function validatePlaceInput(body) {
 function isSamePlace(left, right) {
   if (left.name === right.name && left.roadAddress && left.roadAddress === right.roadAddress) return true;
   return Math.abs(left.lat - right.lat) < 1e-6 && Math.abs(left.lng - right.lng) < 1e-6;
-}
-
-// 지역검색 title/category 에는 <b> 강조 태그와 HTML 엔티티가 섞여 온다.
-function stripSearchMarkup(raw) {
-  return String(raw || '')
-    .replace(/<[^>]*>/g, '')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '&')
-    .trim();
-}
-
-// mapx/mapy 는 WGS84 좌표를 10^7배한 정수 문자열로 온다. (예: 1270284390 -> 127.028439)
-function toCoord(raw) {
-  const value = Number(raw);
-  if (!Number.isFinite(value)) return NaN;
-  return Math.abs(value) > 1000 ? value / 1e7 : value;
-}
-
-function toSearchItem(item) {
-  const lat = toCoord(item.mapy);
-  const lng = toCoord(item.mapx);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return {
-    name: stripSearchMarkup(item.title),
-    category: stripSearchMarkup(item.category),
-    address: stripSearchMarkup(item.address),
-    roadAddress: stripSearchMarkup(item.roadAddress),
-    lat,
-    lng,
-  };
-}
-
-// 네이버 지역검색 프록시. 검색 시크릿이 클라이언트로 나가지 않도록 서버에서만 호출한다.
-async function searchLocalPlaces(query, keyId, keySecret) {
-  if (!query) return { status: 400, body: { error: '검색어를 입력해 주세요.' } };
-  if (query.length > 60) return { status: 400, body: { error: '검색어는 60자 이내로 입력해 주세요.' } };
-  if (!keyId || !keySecret) {
-    return { status: 503, body: { error: '장소 검색 키가 설정되지 않았어요. 이름과 주소를 직접 입력해 등록해 주세요.' } };
-  }
-  const endpoint = new URL(PLACE_SEARCH_ENDPOINT);
-  endpoint.searchParams.set('query', query);
-  endpoint.searchParams.set('display', String(PLACE_SEARCH_DISPLAY));
-  let response;
-  try {
-    response = await fetch(endpoint, {
-      headers: { 'X-NCP-APIGW-API-KEY-ID': keyId, 'X-NCP-APIGW-API-KEY': keySecret },
-    });
-  } catch {
-    return { status: 502, body: { error: '장소 검색 서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.' } };
-  }
-  if (!response.ok) {
-    return { status: 502, body: { error: `장소 검색에 실패했어요. (네이버 응답 ${response.status})` } };
-  }
-  const data = await response.json().catch(() => null);
-  const items = (data && Array.isArray(data.items) ? data.items : []).map(toSearchItem).filter(Boolean);
-  return { status: 200, body: { items } };
 }
 
 // ---- 팀즈로 내보내기 공용 로직 ----
@@ -942,13 +887,10 @@ async function handleApi(req, res, url) {
     return sendJson(res, result.status, result.body);
   }
 
-  // GET /api/places/search?query=... - 네이버 지역검색 프록시
+  // GET /api/places/search?query=... - 카카오 장소검색 (functions/api/_place-search.js 와 같은 모듈 사용)
   if (req.method === 'GET' && parts.length === 3 && parts[1] === 'places' && parts[2] === 'search') {
-    const result = await searchLocalPlaces(
-      String(url.searchParams.get('query') || '').trim(),
-      process.env.NAVER_SEARCH_KEY_ID,
-      process.env.NAVER_SEARCH_KEY
-    );
+    const { searchKakaoPlaces } = await loadPlaceSearch();
+    const result = await searchKakaoPlaces(String(url.searchParams.get('query') || '').trim(), process.env.KAKAO_REST_API_KEY);
     return sendJson(res, result.status, result.body);
   }
 
@@ -956,7 +898,7 @@ async function handleApi(req, res, url) {
   if (req.method === 'GET' && parts.length === 2 && parts[1] === 'config') {
     return sendJson(res, 200, {
       naverMapKeyId: process.env.NAVER_MAP_KEY_ID || '',
-      placeSearchEnabled: Boolean(process.env.NAVER_SEARCH_KEY_ID && process.env.NAVER_SEARCH_KEY),
+      placeSearchEnabled: Boolean(process.env.KAKAO_REST_API_KEY), // 카카오 장소검색 REST 키
       // 카카오 JavaScript 키. 브라우저 노출용이며 카카오 콘솔의 도메인 등록으로 보호된다.
       kakaoJsKey: process.env.KAKAO_JS_KEY || '',
     });

@@ -1,7 +1,8 @@
-// GET /api/places/search?query=... - 네이버 지역검색 프록시
-import { searchLocalPlaces } from '../_shared.js';
+// GET /api/places/search?query=... - 카카오 장소검색 (기준점 + 자체 랭킹). REST 키는 서버에서만 쓴다.
+import { searchKakaoPlaces } from '../_place-search.js';
 
-export function onRequestGet({ request, env }) {
+export async function onRequestGet({ request, env }) {
   const query = String(new URL(request.url).searchParams.get('query') || '').trim();
-  return searchLocalPlaces(query, env.NAVER_SEARCH_KEY_ID, env.NAVER_SEARCH_KEY);
+  const result = await searchKakaoPlaces(query, env.KAKAO_REST_API_KEY);
+  return Response.json(result.body, { status: result.status });
 }
