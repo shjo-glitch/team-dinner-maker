@@ -108,66 +108,91 @@ export function refreshExpireDate(event) {
   event.expireDate = nextDate(latestTopDate);
 }
 
-// ---- 공휴일 캐시 (hudy.co.kr) ----
-// hudy 무료 플랜은 월 100콜이라 매 생성마다 호출하지 않는다.
-// D1 의 holiday_cache 테이블이 비어 있을 때 최초 1회만 현재+미래 5개년(6개 연도)을
-// 연 단위 API 로 받아 저장하고(연 1콜에 그 해 모든 월이 포함된다), 이후에는 캐시만 읽는다.
-const HOLIDAY_API_ENDPOINT = 'https://api.hudy.co.kr/v2/holidays';
+// ---- 공휴일 캐시 (공공데이터포털 · 한국천문연구원 특일정보) ----
+// getRestDeInfo 는 solMonth 를 생략하면 그 해 전체 공휴일(대체·임시공휴일 포함)을 준다.
+// 개발계정 일 10,000콜이라 여유가 있으므로, 연도별로 캐시하되 만료(30일, 빈 해는 7일)를 두고
+// 다시 받아 연중에 지정되는 임시공휴일·다음 해 데이터 공개를 따라간다.
+const HOLIDAY_API_ENDPOINT = 'https://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo';
 export const HOLIDAY_CACHE_YEARS = 6; // 현재 연도 + 미래 5개년
+const HOLIDAY_REFRESH_MS = 30 * 24 * 60 * 60 * 1000; // 데이터가 있는 해
+const HOLIDAY_EMPTY_REFRESH_MS = 7 * 24 * 60 * 60 * 1000; // 아직 미공개(빈) 해는 더 자주 확인
 
-// 한 해의 공휴일을 { 'yyyy-MM-dd': '이름' } 으로 반환. 실패는 null. (빈 해는 {} — 정상)
+function isHolidayCacheStale(fetchedAt, isEmpty) {
+  const age = Date.now() - new Date(fetchedAt || 0).getTime();
+  return !Number.isFinite(age) || age > (isEmpty ? HOLIDAY_EMPTY_REFRESH_MS : HOLIDAY_REFRESH_MS);
+}
+
+// 한 해의 공휴일을 { 'yyyy-MM-dd': '이름' } 으로 반환. 실패는 null. (빈 해는 {} — 아직 미공개)
 export async function fetchHolidayYear(year, apiKey) {
   try {
-    const response = await fetch(`${HOLIDAY_API_ENDPOINT}?year=${year}`, {
-      headers: { 'x-api-key': apiKey },
-      signal: AbortSignal.timeout(5000),
-    });
+    const endpoint = new URL(HOLIDAY_API_ENDPOINT);
+    // Decoding 키를 그대로 넣는다. (URLSearchParams 가 +, = 를 인코딩한다)
+    endpoint.searchParams.set('serviceKey', apiKey);
+    endpoint.searchParams.set('solYear', String(year));
+    endpoint.searchParams.set('_type', 'json');
+    endpoint.searchParams.set('numOfRows', '100');
+    const response = await fetch(endpoint, { signal: AbortSignal.timeout(8000) });
     if (!response.ok) {
-      console.error(`[holidays] hudy 응답 ${response.status} (year=${year})`);
+      console.error(`[holidays] data.go.kr 응답 ${response.status} (year=${year})`);
       return null;
     }
     const payload = await response.json().catch(() => null);
-    if (!payload || payload.result !== true || !Array.isArray(payload.data)) return null;
+    const header = payload && payload.response && payload.response.header;
+    const body = payload && payload.response && payload.response.body;
+    if (!header || header.resultCode !== '00' || !body) {
+      console.error(`[holidays] data.go.kr 오류 응답 (year=${year}): ${header ? header.resultMsg : 'no header'}`);
+      return null;
+    }
+    // items 는 0건이면 빈 문자열, 1건이면 객체, 여러 건이면 배열로 온다.
+    let items = body.items && body.items.item ? body.items.item : [];
+    if (!Array.isArray(items)) items = [items];
     const holidays = {};
-    for (const holiday of payload.data) {
-      const date = String(holiday.date || '');
-      if (date) holidays[date] = String(holiday.name || '').slice(0, 20);
+    for (const item of items) {
+      const raw = String(item.locdate || '');
+      if (!/^\d{8}$/.test(raw) || item.isHoliday === 'N') continue;
+      holidays[`${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`] = String(item.dateName || '').slice(0, 20);
     }
     return holidays;
   } catch (error) {
-    console.error(`[holidays] hudy 조회 실패 (year=${year}): ${error.message}`);
+    console.error(`[holidays] data.go.kr 조회 실패 (year=${year}): ${error.message}`);
     return null;
   }
 }
 
-// 캐시가 비어 있으면 최초 1회 시딩한다. 빈 해(데이터 미공개)도 저장해 재호출을 막는다.
-async function ensureHolidayCache(env) {
+// 표시 범위 연도 중 캐시가 없거나 만료된 해만 다시 받아 저장한다. 실패한 해는 기존 값을 유지한다.
+async function ensureHolidayCache(env, startYear, endYear) {
   await env.DB.prepare(
     'CREATE TABLE IF NOT EXISTS holiday_cache (year INTEGER PRIMARY KEY, data TEXT NOT NULL, fetched_at TEXT NOT NULL)'
   ).run();
-  const row = await env.DB.prepare('SELECT COUNT(*) AS n FROM holiday_cache').first();
-  if (row && row.n > 0) return;
-  if (!env.HUDY_API_KEY) return;
+  if (!env.DATA_GO_API_KEY) return;
 
   const baseYear = new Date().getFullYear();
-  const now = new Date().toISOString();
-  for (let year = baseYear; year < baseYear + HOLIDAY_CACHE_YEARS; year++) {
-    const holidays = await fetchHolidayYear(year, env.HUDY_API_KEY);
-    if (holidays === null) continue; // 실패한 해는 저장하지 않아 다음 기회에 다시 시도된다
+  const fromYear = Math.min(startYear, baseYear);
+  const toYear = Math.max(endYear, baseYear + HOLIDAY_CACHE_YEARS - 1);
+  const rows = await env.DB.prepare('SELECT year, data, fetched_at FROM holiday_cache WHERE year BETWEEN ?1 AND ?2').bind(fromYear, toYear).all();
+  const cached = new Map((rows.results || []).map((row) => [Number(row.year), row]));
+
+  const refreshed = [];
+  for (let year = fromYear; year <= toYear; year++) {
+    const row = cached.get(year);
+    if (row && !isHolidayCacheStale(row.fetched_at, row.data === '{}')) continue;
+    const holidays = await fetchHolidayYear(year, env.DATA_GO_API_KEY);
+    if (holidays === null) continue; // 실패한 해는 기존 캐시를 그대로 두고 다음 기회에 다시 시도한다
     await env.DB.prepare('INSERT OR REPLACE INTO holiday_cache (year, data, fetched_at) VALUES (?1, ?2, ?3)')
-      .bind(year, JSON.stringify(holidays), now)
+      .bind(year, JSON.stringify(holidays), new Date().toISOString())
       .run();
+    refreshed.push(`${year}(${Object.keys(holidays).length})`);
   }
-  console.log(`[holidays] 캐시 시딩 완료 (${baseYear}~${baseYear + HOLIDAY_CACHE_YEARS - 1})`);
+  if (refreshed.length) console.log(`[holidays] 캐시 갱신: ${refreshed.join(', ')}`);
 }
 
 // 표시 범위의 공휴일을 캐시에서 읽는다. 캐시가 전혀 없으면 null(클라이언트 내장 데이터 폴백).
 export async function getHolidaysForRange(env, startDate, endDate) {
   try {
-    await ensureHolidayCache(env);
-    const rows = await env.DB.prepare('SELECT data FROM holiday_cache WHERE year BETWEEN ?1 AND ?2')
-      .bind(Number(startDate.slice(0, 4)), Number(endDate.slice(0, 4)))
-      .all();
+    const startYear = Number(startDate.slice(0, 4));
+    const endYear = Number(endDate.slice(0, 4));
+    await ensureHolidayCache(env, startYear, endYear);
+    const rows = await env.DB.prepare('SELECT data FROM holiday_cache WHERE year BETWEEN ?1 AND ?2').bind(startYear, endYear).all();
     if (!rows.results || rows.results.length === 0) return null;
     const holidays = {};
     for (const row of rows.results) {

@@ -23,7 +23,7 @@
 | 드래그 범위 선택 | 달력에서 시작일을 누른 채 드래그하면 **시작일~끝일 사이의 모든 날짜**가 한 번에 선택됩니다. 드래그 중 화면 가장자리로 가면 자동 스크롤되어 **달 경계를 넘어 연속으로** 선택할 수 있습니다. |
 | 표시 범위 지정 | 약속을 만들 때 달력 범위를 **이번달(오늘~말일) / 다음달(1일~말일) / 특정 날짜까지(오늘~지정일)** 중에서 지정합니다. |
 | 약속 테마 | **평일 약속 / 주말 약속 / 평일+주말** 중 선택. 평일 약속이면 주말이, 주말 약속이면 평일이 자동으로 선택 불가 처리됩니다. |
-| 공휴일 표시 | [hudy.co.kr](https://www.hudy.co.kr) 공휴일 API를 **최초 1회만 호출해 현재+미래 5개년(6개 연도)을 캐시에 저장**하고(D1 `holiday_cache` / 로컬 `.data/holidays-cache.json`), 약속을 만들 땐 캐시에서 표시 범위의 공휴일을 꺼내 기입합니다. 캐시가 없으면 내장 데이터(2025~2027)로 폴백합니다. |
+| 공휴일 표시 | 공공데이터포털 **한국천문연구원 특일정보 API**(`getRestDeInfo`, 대체·임시공휴일 포함)를 연 단위로 받아 캐시(D1 `holiday_cache` / 로컬 `.data/holidays-cache.json`)에 두고, 약속을 만들 땐 캐시에서 표시 범위의 공휴일을 꺼내 기입합니다. 캐시는 **30일(아직 미공개인 빈 해는 7일)마다 다시 받아** 연중 지정되는 임시공휴일과 다음 해 데이터 공개를 따라갑니다. 캐시가 없으면 내장 데이터(2025~2027)로 폴백합니다. |
 | 겹침 농도 뱃지 | 날짜별로 가능한 인원이 많을수록 와인 레드 `#9C3024` 뱃지가 진해집니다. **1명이 선택할 때마다 알파값이 (1/참여자 수)씩** 더해져 전원이 겹친 날은 완전히 진하게 표시됩니다. |
 | 최다 겹침 강조 | 가장 많은 인원이 겹친 날(공동 1등 포함)은 딥 골드 테두리의 골드 링과 4방향 스파클로 강조됩니다. 스파클은 우상단·좌하단 순서로 반복 재생됩니다. |
 | 회식 날 후보 순위 | 결과 탭 상단에서 가능 인원이 많은 순으로 1~3위 후보를 보여줍니다. 동점 날짜는 같은 순위에 묶어 `1위: 1/1, 1/2` 형식으로 표시합니다. **일정이 확정되면 이 카드가 초록 '확정된 일정' 카드로 전환**되어 확정 날짜·시간을 보여줍니다. |
@@ -330,16 +330,16 @@ Microsoft Graph로 채널에 글을 쓰려면 위임 권한 `ChannelMessage.Send
 
 ![공휴일 표시](images/05-holidays.png)
 
-공휴일은 [hudy.co.kr](https://www.hudy.co.kr) 공휴일 API(`GET /v2/holidays?year=`, 연 단위라 한 콜에 그 해 모든 월이 포함)를
-**최초 1회만 호출해 현재+미래 5개년(6개 연도)을 캐시에 저장**해 두고, 약속을 만들 땐 **캐시에서** 표시 범위의 공휴일을 꺼내 약속에 기입합니다.
+공휴일은 공공데이터포털의 [한국천문연구원_특일 정보](https://www.data.go.kr/data/15012690/openapi.do) API
+(`GET https://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo?solYear=YYYY&_type=json&numOfRows=100`,
+`solMonth` 를 생략하면 그 해 전체 공휴일이 오며 대체·임시공휴일이 포함됩니다)를 연 단위로 받아 캐시합니다.
 
-- **로컬(server.js)**: 서버 구동 시 `.data/holidays-cache.json` 이 없으면 1회 시딩합니다. (있으면 호출 없음)
-- **Cloudflare(D1)**: `holiday_cache` 테이블이 비어 있으면 첫 약속 생성 때 1회 시딩합니다. 테이블은 자동 생성됩니다.
-- 시딩은 **총 6콜**(연도당 1콜)이고, 이후 약속 생성은 **API 콜 0회**입니다. 무료 플랜 월 100콜 한도에 여유가 큽니다.
-- 아직 데이터가 없는 미래 연도(빈 응답)도 저장해 재호출을 막고, **실패한 해만** 다음 기회에 다시 시도합니다.
-- 캐시가 전혀 없거나 키가 없으면 약속에는 `holidays: null` 로 저장되고, 화면은 내장 데이터(`public/js/holidays.js`, 2025~2027)로 폴백합니다.
-- API 키는 `HUDY.env`(로컬) / `.dev.vars`(wrangler dev) / Pages 시크릿 `HUDY_API_KEY`(배포)에 둡니다. 모두 git에 커밋되지 않고 클라이언트로 나가지 않습니다.
-- 캐시를 새로 받고 싶으면(연도가 지났을 때 등) 로컬은 `.data/holidays-cache.json` 삭제 후 재기동, D1은 `DELETE FROM holiday_cache` 후 약속을 하나 만들면 됩니다.
+- **Cloudflare(D1)**: 약속을 만들 때 표시 범위 연도 + 현재~미래 5개년 중 캐시가 없거나 만료된 해만 다시 받아 `holiday_cache` 테이블에 저장합니다. 테이블은 자동 생성됩니다.
+- **로컬(server.js)**: 서버 구동 시 같은 규칙으로 `.data/holidays-cache.json` 을 갱신합니다.
+- 만료 기준은 데이터가 있는 해 **30일**, 아직 미공개라 빈 해는 **7일**입니다. 개발계정 쿼터(일 10,000콜)에 비해 호출량이 매우 적습니다.
+- 실패한 해는 기존 캐시를 그대로 두고 다음 기회에 다시 시도합니다. 캐시가 전혀 없으면 클라이언트 내장 데이터(2025~2027)로 폴백합니다.
+- API 키는 `DATA_GO.env`(로컬) / `.dev.vars`(wrangler dev) / Pages 시크릿 `DATA_GO_API_KEY`(배포)에 둡니다. 공공데이터포털의 **Decoding 키**를 그대로 넣습니다(호출 시 URLSearchParams 가 인코딩). 모두 git에 커밋되지 않고 클라이언트로 나가지 않습니다.
+- 캐시를 지금 바로 새로 받고 싶으면 로컬은 `.data/holidays-cache.json` 삭제 후 재기동, D1은 `DELETE FROM holiday_cache` 후 약속을 하나 만들면 됩니다.
 
 ## 6. 일정 & 장소 정하기 (병행)
 
@@ -483,7 +483,7 @@ Microsoft Graph로 채널에 글을 쓰려면 위임 권한 `ChannelMessage.Send
 ├── server.js                # 로컬 실행용 무의존성 서버 (.data/에 JSON 파일 저장)
 ├── NAVER.env                # 네이버 지도 키 (git 제외) — 로컬 server.js 가 읽음
 ├── KAKAO.env                # 카카오 JS 키·REST 키 (git 제외) — 로컬 server.js 가 읽음
-├── HUDY.env                 # hudy 공휴일 API 키 (git 제외) — 로컬 server.js 가 읽음
+├── DATA_GO.env              # 공공데이터포털(천문연 특일정보) 키 (git 제외) — 로컬 server.js 가 읽음
 ├── .dev.vars                # 네이버 API 키 (git 제외) — wrangler pages dev 가 읽음
 ├── wrangler.toml            # Cloudflare Pages 설정 (D1 바인딩: DB)
 └── wrangler.expiry.toml     # 만료 정리 Worker 설정 (Cron Trigger: 매일 15:00 UTC)
