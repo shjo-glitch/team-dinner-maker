@@ -880,12 +880,37 @@ async function addPlace() {
   }
 }
 
+// 참여자를 고르지 않고 투표하면 강제로 스크롤하지 않고, 우하단 토스트로 알린다.
+// 토스트는 5초 뒤 저절로 사라지고, 누르면 '나는 누구인가요?' 카드로 올라간다.
+const VOTER_TOAST_MS = 5000;
+let voterToastTimer = null;
+
+function showVoterToast() {
+  const toast = $('voter-toast');
+  toast.hidden = false;
+  // 연달아 눌러도 마지막 시점부터 5초를 다시 센다.
+  clearTimeout(voterToastTimer);
+  voterToastTimer = setTimeout(hideVoterToast, VOTER_TOAST_MS);
+}
+
+function hideVoterToast() {
+  clearTimeout(voterToastTimer);
+  voterToastTimer = null;
+  $('voter-toast').hidden = true;
+}
+
+function goToVoterPicker() {
+  hideVoterToast();
+  $('place-voters').closest('.voter-field').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const firstChip = $('place-voters').querySelector('button, [tabindex]');
+  if (firstChip) firstChip.focus({ preventScroll: true });
+}
+
 async function votePlace(placeId) {
   const errorEl = $('place-error');
   errorEl.textContent = '';
   if (!activeVoterName) {
-    errorEl.textContent = '먼저 위에서 내 이름을 선택해 주세요.';
-    $('place-voters').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    showVoterToast();
     return;
   }
   const res = await fetch(`/api/events/${eventId}/places`, {
@@ -1693,6 +1718,7 @@ async function init() {
     renderSearchResults();
   });
 
+  $('voter-toast-btn').addEventListener('click', goToVoterPicker);
   $('place-voters').addEventListener('click', (e) => {
     const chip = e.target.closest('[data-voter]');
     if (chip) selectVoter(chip.dataset.voter);

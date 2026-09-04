@@ -369,6 +369,16 @@ input:focus-visible { border-color: var(--accent); background: #fffefa; box-shad
 .share-btn:focus-visible { outline: 3px solid rgba(74, 121, 217, 0.35); outline-offset: 2px; }
 .share-btn svg { width: 14px; height: 14px; }
 
+/* 우하단 토스트 (참여자 미선택 투표 안내) */
+.toast { position: fixed; right: 18px; bottom: 18px; z-index: 60; max-width: min(400px, calc(100% - 36px)); border-radius: 4px; box-shadow: 0 14px 36px rgba(54, 36, 19, 0.28); animation: toast-in 220ms ease-out; }
+.toast[hidden] { display: none; }
+.toast-danger { background: var(--accent); color: #fffaf3; }
+.toast-body { display: block; width: 100%; padding: 13px 16px; color: inherit; border: 0; border-radius: inherit; background: transparent; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; line-height: 1.55; text-align: left; word-break: keep-all; }
+.toast-body:hover { background: rgba(0, 0, 0, 0.12); }
+.toast-body:focus-visible { outline: 3px solid rgba(255, 250, 243, 0.55); outline-offset: 2px; }
+.toast-link { text-decoration: underline; text-underline-offset: 3px; font-weight: 700; white-space: nowrap; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
 /* 확정된 장소 배너 */
 .confirmed-place { margin-top: 15px; padding: 15px 16px; border: 1px solid rgba(40, 98, 71, 0.34); border-left: 3px solid var(--success); border-radius: 3px; background: #eef5f1; }
 .confirmed-place[hidden] { display: none; }
@@ -391,6 +401,7 @@ input:focus-visible { border-color: var(--accent); background: #fffefa; box-shad
 .webhook-fields code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
 @media (max-width: 560px) {
+  .toast { right: 12px; bottom: 12px; left: 12px; max-width: none; }
   .wrap { padding: 31px 15px 76px; }.landing-head { padding: 16px 0 30px; }.event-site-head { padding-bottom: 24px; }.card { padding: 24px 18px; border-radius: 3px 3px 17px 3px; }.theme-picker { gap: 5px; }.theme-picker .theme-opt { min-height: 94px; padding-inline: 3px; font-size: 11px; }.theme-picker .theme-opt small { font-size: 9px; }.cal-cell { min-height: 58px; padding-top: 5px; }.cal-day { width: 31px; height: 31px; font-size: 12px; }.cal-holiday { font-size: 7px; }.cal-count { font-size: 8px; }.cal-grid { gap: 1px; }.float-save { bottom: 10px; width: calc(100% - 20px); }.float-save .btn { padding-inline: 16px; }.event-head { padding-bottom: 22px; }.candidate-ranking { padding-block: 23px 20px; }.candidate-ranking-row { grid-template-columns: 47px minmax(0, 1fr); gap: 10px; }.candidate-rank-dates { font-size: 18px; }.cancel-dialog-form { padding: 26px 21px 22px; }.cancel-dialog-actions { flex-direction: column-reverse; }.cancel-dialog-actions .btn { width: 100%; }.tabs button { font-size: 11px; padding-inline: 2px; }.place-map { height: 260px; }.place-card { grid-template-columns: 26px minmax(0, 1fr); }.place-no { width: 26px; height: 26px; font-size: 11px; }.place-actions { grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: flex-end; gap: 12px; }.place-name { font-size: 17px; }.steps li { font-size: 10px; padding: 4px 9px 4px 5px; }.webhook-field { grid-template-columns: 96px minmax(0, 1fr); }.place-card-footer { flex-direction: column; }.share-btn { min-height: 38px; }.toggle-btn { font-size: 11px; padding: 7px 11px 7px 8px; }.teams-dialog { max-height: 92vh; }.teams-dialog .cancel-dialog-form { max-height: 92vh; }.teams-preview-row { grid-template-columns: 66px minmax(0, 1fr); }.success-dialog-content { padding: 27px 21px; }
 }
 

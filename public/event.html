@@ -351,6 +351,13 @@
     </dialog>
   </div>
 
+  <!-- 참여자를 고르지 않고 후보지에 투표하면 우하단에 5초간 뜨는 토스트. 누르면 참여자 선택 카드로 스크롤. -->
+  <div class="toast toast-danger" id="voter-toast" role="status" aria-live="polite" hidden>
+    <button type="button" class="toast-body" id="voter-toast-btn">
+      후보지에 투표하려면 먼저 참여자를 선택해야 합니다. <u class="toast-link">참여자 선택하기</u>
+    </button>
+  </div>
+
   <script async defer src="https://teams.microsoft.com/share/launcher.js"></script>
   <script src="/js/holidays.js"></script>
   <script src="/js/calendar.js"></script>
