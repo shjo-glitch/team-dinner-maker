@@ -141,7 +141,9 @@ export function rankCandidates(primary, nearby, rule) {
   });
 
   const scored = [...merged.values()].map((entry) => {
-    const meters = Number(entry.doc.distance);
+    // 기준점 좌표 없이 검색하면 카카오가 distance 를 빈 문자열로 준다. (0m 가 아니라 '거리 없음')
+    const rawDistance = entry.doc.distance;
+    const meters = rawDistance === '' || rawDistance == null ? NaN : Number(rawDistance);
     const score = entry.rankScore + distanceScore(meters) + categoryScore(entry.doc.category_name, rule) + qualityScore(entry.doc);
     return { ...entry, meters: Number.isFinite(meters) ? meters : null, score };
   });
