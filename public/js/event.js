@@ -740,7 +740,7 @@ function renderPlaceList() {
           <div class="place-body">
             <h3 class="place-name">${esc(place.name)}</h3>
             ${place.category ? `<p class="place-category">${esc(place.category)}</p>` : ''}
-            <p class="place-address">${esc(place.roadAddress || place.address || '')}</p>
+            <p class="place-address">${esc(place.roadAddress || place.address || (place.link ? '공유 링크로 등록 · 지도 ↗ 로 위치 확인' : ''))}</p>
             <div class="place-votes">${
               votes.length
                 ? votes.map((voter) => `<span class="name-tag ok">${esc(voter)}</span>`).join('')
@@ -826,6 +826,19 @@ function searchResultRow(item, index) {
     </div>`;
 }
 
+// 등록 버튼: 검색 결과를 골랐거나, 고르지 않았어도 '장소 이름 + 공유 링크'가 있으면 누를 수 있다.
+// (검색에 안 나오는 새 가게는 검색창에 쓴 이름 그대로 링크와 함께 등록)
+function isManualPlaceEntry() {
+  return selectedResultIndex === null && Boolean($('place-query').value.trim()) && Boolean($('place-link').value.trim());
+}
+
+function updatePlaceAddButton() {
+  const button = $('place-add-btn');
+  const manual = isManualPlaceEntry();
+  button.disabled = selectedResultIndex === null && !manual;
+  button.querySelector('span').textContent = manual ? '입력한 이름으로 후보 등록' : '후보로 등록';
+}
+
 function searchPageCount() {
   return Math.ceil(searchResults.length / SEARCH_PAGE_SIZE);
 }
@@ -845,7 +858,7 @@ function renderSearchResults() {
   searchPage = Math.min(searchPage, Math.max(0, pageCount - 1));
   list.scrollTo({ left: searchPage * list.clientWidth, behavior: 'instant' });
   updateSearchPager();
-  $('place-add-btn').disabled = selectedResultIndex === null;
+  updatePlaceAddButton();
 }
 
 // 선택만 바뀔 때는 다시 그리지 않고 클래스만 갱신한다. (스크롤 위치 유지)
@@ -858,7 +871,7 @@ function refreshSearchSelection() {
     pick.setAttribute('aria-pressed', String(active));
     pick.querySelector('.place-result-mark').textContent = active ? '●' : '○';
   });
-  $('place-add-btn').disabled = selectedResultIndex === null;
+  updatePlaceAddButton();
 }
 
 // 화살표 노출(첫/마지막 페이지에서는 숨김)과 "n / m" 표시.
@@ -960,7 +973,7 @@ async function searchPlaces() {
     searchPage = 0;
     renderSearchResults();
     if (searchResults.length === 0) {
-      errorEl.textContent = '검색 결과가 없어요. \'지역 + 종류\'(예: 서초역 맛집)나 상호로 다시 검색해 보세요.';
+      errorEl.textContent = '검색 결과가 없어요. 새로 연 가게라면 아래에 장소 공유 링크를 넣고, 입력한 이름 그대로 등록할 수 있어요.';
     }
   } catch (err) {
     searchResults = [];
@@ -975,8 +988,10 @@ async function searchPlaces() {
 }
 
 async function addPlace() {
-  if (selectedResultIndex === null) return;
-  const item = searchResults[selectedResultIndex];
+  const manual = isManualPlaceEntry();
+  if (selectedResultIndex === null && !manual) return;
+  // 수동 등록은 좌표·주소 없이 이름만 보낸다. (서버는 공유 링크가 있어야 받아 준다)
+  const item = manual ? { name: $('place-query').value.trim() } : searchResults[selectedResultIndex];
   const errorEl = $('place-error');
   const infoEl = $('place-info');
   errorEl.textContent = '';
@@ -1003,7 +1018,7 @@ async function addPlace() {
     infoEl.textContent = `'${item.name}' 을(를) 후보로 등록했어요.`;
   } catch (err) {
     errorEl.textContent = err.message;
-    button.disabled = false;
+    updatePlaceAddButton();
   }
 }
 
@@ -1133,8 +1148,7 @@ function renderPlacePanel() {
   renderPlaceList();
   renderSearchResults();
   if (!appConfig.placeSearchEnabled) {
-    $('place-search-hint').textContent = '장소 검색 키가 설정되지 않아 검색을 사용할 수 없어요. 모임 주최자에게 문의해 주세요.';
-    $('place-query').disabled = true;
+    $('place-search-hint').textContent = '장소 검색 키가 설정되지 않아 검색은 쓸 수 없어요. 장소 이름과 아래 공유 링크를 넣으면 그대로 등록할 수 있어요.';
     $('place-search-btn').disabled = true;
   }
   updatePlaceMap();
@@ -1844,6 +1858,8 @@ async function init() {
     }
   });
   $('place-add-btn').addEventListener('click', addPlace);
+  $('place-query').addEventListener('input', updatePlaceAddButton);
+  $('place-link').addEventListener('input', updatePlaceAddButton);
 
   // 검색 결과 캐러셀 (선택 토글·드래그·화살표·키보드)
   bindSearchCarousel();

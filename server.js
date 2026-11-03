@@ -390,16 +390,25 @@ function normalizePlaceLink(raw) {
 
 function validatePlaceInput(body) {
   const name = String(body.name || '').trim();
-  const lat = Number(body.lat);
-  const lng = Number(body.lng);
   const addedBy = String(body.addedBy || '').trim();
   if (!name || name.length > 60) return { error: '장소 이름은 1~60자로 입력해 주세요.' };
-  // 대한민국 영역 밖 좌표는 잘못 넘어온 값으로 본다.
-  if (!Number.isFinite(lat) || lat < 33 || lat > 39.5) return { error: '좌표가 대한민국 범위를 벗어났어요.' };
-  if (!Number.isFinite(lng) || lng < 124 || lng > 132) return { error: '좌표가 대한민국 범위를 벗어났어요.' };
   if (addedBy.length > 20) return { error: '등록자 이름이 너무 깁니다.' };
   const linkResult = normalizePlaceLink(body.link);
   if (linkResult.error) return { error: linkResult.error };
+  // 검색에 안 나오는 곳(새로 연 가게 등)은 좌표 없이 '이름 + 장소 공유 링크'만으로 등록할 수 있다.
+  // 좌표가 없으면 지도 핀만 빠지고, 지도 링크는 공유 링크로 열린다.
+  const hasCoords = body.lat !== undefined && body.lat !== null && body.lat !== '';
+  let lat = null;
+  let lng = null;
+  if (hasCoords) {
+    lat = Number(body.lat);
+    lng = Number(body.lng);
+    // 대한민국 영역 밖 좌표는 잘못 넘어온 값으로 본다.
+    if (!Number.isFinite(lat) || lat < 33 || lat > 39.5) return { error: '좌표가 대한민국 범위를 벗어났어요.' };
+    if (!Number.isFinite(lng) || lng < 124 || lng > 132) return { error: '좌표가 대한민국 범위를 벗어났어요.' };
+  } else if (!linkResult.link) {
+    return { error: '검색 결과에서 장소를 고르거나, 장소 공유 링크를 함께 넣어 주세요.' };
+  }
   return {
     place: {
       name,
@@ -416,6 +425,9 @@ function validatePlaceInput(body) {
 
 function isSamePlace(left, right) {
   if (left.name === right.name && left.roadAddress && left.roadAddress === right.roadAddress) return true;
+  if (left.link && left.link === right.link) return true;
+  // 좌표 없이 링크로 등록한 후보끼리는 좌표로 비교하지 않는다. (null - null = 0 이라 모두 같은 곳으로 보임)
+  if (!Number.isFinite(left.lat) || !Number.isFinite(right.lat)) return false;
   return Math.abs(left.lat - right.lat) < 1e-6 && Math.abs(left.lng - right.lng) < 1e-6;
 }
 

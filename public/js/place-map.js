@@ -29,6 +29,10 @@ function loadNaverMaps(keyId) {
   return mapsLoadPromise;
 }
 
+function hasCoords(place) {
+  return Number.isFinite(place.lat) && Number.isFinite(place.lng);
+}
+
 class PlaceMap {
   constructor(container, { onSelect, onAuthFailure } = {}) {
     this.container = container;
@@ -62,7 +66,9 @@ class PlaceMap {
   setPlaces(places) {
     if (!this.map) return;
     this.markers.forEach((marker) => marker.setMap(null));
-    this.markers = places.map((place, index) => {
+    // 공유 링크로만 등록한 후보는 좌표가 없어 핀을 찍지 않는다. 번호는 목록 순서 그대로.
+    const pinned = places.map((place, index) => ({ place, index })).filter(({ place }) => hasCoords(place));
+    this.markers = pinned.map(({ place, index }) => {
       const marker = new this.maps.Marker({
         map: this.map,
         position: new this.maps.LatLng(place.lat, place.lng),
@@ -75,7 +81,7 @@ class PlaceMap {
       this.maps.Event.addListener(marker, 'click', () => this.onSelect && this.onSelect(place.id));
       return marker;
     });
-    this.fitTo(places);
+    this.fitTo(pinned.map(({ place }) => place));
   }
 
   fitTo(places) {
