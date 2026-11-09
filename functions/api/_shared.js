@@ -11,6 +11,9 @@ export const MANAGE_LOCK_MESSAGE = '관리 비밀번호를 5회 틀려 3분 동�
 export const MAX_PLACES = 12;
 export const TEAMS_EXPORT_COOLDOWN_MS = 10 * 1000;
 export const TEAMS_NOTE_MAX = 200;
+// 투표 마감시간은 지금부터 최대 1년 뒤까지 지정할 수 있다.
+export const VOTE_DEADLINE_MAX_MS = 366 * 24 * 60 * 60 * 1000;
+export const VOTE_CLOSED_MESSAGE = '투표가 마감되어 일정·장소 투표를 더 이상 바꿀 수 없어요.';
 
 export function createManagePinSalt() {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -42,7 +45,42 @@ export async function saveEvent(env, event) {
 export function publicEvent(event) {
   const { managePinHash, managePinSalt, deleteAuthFailures, ...publicData } = event;
   // 확정/장소 기능 이전에 만들어진 약속도 같은 모양으로 응답한다.
-  return { confirmedAt: null, confirmedDate: null, confirmedTime: null, confirmedPlaceId: null, places: [], holidays: null, ...publicData };
+  return {
+    confirmedAt: null,
+    confirmedDate: null,
+    confirmedTime: null,
+    confirmedPlaceId: null,
+    voteDeadline: null,
+    places: [],
+    holidays: null,
+    ...publicData,
+  };
+}
+
+// ---- 투표 마감 ----
+// 마감시간(ISO 문자열)이 지나면 날짜 투표(참여자 일정 등록·수정·삭제)와
+// 장소 투표(후보 등록·좋아요·삭제)를 막는다. 확정·파기 같은 관리 기능은 마감과 무관하다.
+export function isVotingClosed(event, now = Date.now()) {
+  if (!event.voteDeadline) return false;
+  const deadline = new Date(event.voteDeadline).getTime();
+  return Number.isFinite(deadline) && now >= deadline;
+}
+
+// 마감됐으면 그대로 돌려줄 403 Response, 아니면 null.
+export function votingClosedResponse(event) {
+  if (!isVotingClosed(event)) return null;
+  return Response.json({ error: VOTE_CLOSED_MESSAGE, voteDeadline: event.voteDeadline }, { status: 403 });
+}
+
+// 관리자가 넣은 마감시간 검증. null/빈 값은 마감 해제.
+// 이미 지난 시각도 받는다. (관리자가 '지금 마감'하려는 경우)
+export function normalizeVoteDeadline(raw, now = Date.now()) {
+  if (raw === null || raw === undefined || raw === '') return { deadline: null };
+  const value = String(raw);
+  const time = new Date(value).getTime();
+  if (value.length > 40 || !Number.isFinite(time)) return { error: '마감시간 형식이 올바르지 않습니다.' };
+  if (time > now + VOTE_DEADLINE_MAX_MS) return { error: '마감시간은 지금부터 1년 안으로 정해 주세요.' };
+  return { deadline: new Date(time).toISOString() };
 }
 
 export async function readJson(request) {

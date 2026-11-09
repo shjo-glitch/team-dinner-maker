@@ -99,6 +99,9 @@ const MANAGE_LOCK_MESSAGE = '관리 비밀번호를 5회 틀려 3분 동안 관�
 const MAX_PLACES = 12;
 const TEAMS_EXPORT_COOLDOWN_MS = 10 * 1000;
 const TEAMS_NOTE_MAX = 200;
+// 투표 마감시간은 지금부터 최대 1년 뒤까지 지정할 수 있다.
+const VOTE_DEADLINE_MAX_MS = 366 * 24 * 60 * 60 * 1000;
+const VOTE_CLOSED_MESSAGE = '투표가 마감되어 일정·장소 투표를 더 이상 바꿀 수 없어요.';
 
 function validateEventInput(body) {
   const title = String(body.title || '').trim();
@@ -133,7 +136,39 @@ function hashManagePin(pin, salt) {
 function publicEvent(event) {
   const { managePinHash, managePinSalt, deleteAuthFailures, ...publicData } = event;
   // 확정/장소 기능 이전에 만들어진 약속도 같은 모양으로 응답한다.
-  return { confirmedAt: null, confirmedDate: null, confirmedTime: null, confirmedPlaceId: null, places: [], holidays: null, ...publicData };
+  return {
+    confirmedAt: null,
+    confirmedDate: null,
+    confirmedTime: null,
+    confirmedPlaceId: null,
+    voteDeadline: null,
+    places: [],
+    holidays: null,
+    ...publicData,
+  };
+}
+
+// ---- 투표 마감 ---- (functions/api/_shared.js 와 같은 규칙)
+// 마감시간이 지나면 날짜 투표(참여자 일정 등록·수정·삭제)와 장소 투표(후보 등록·좋아요·삭제)를 막는다.
+function isVotingClosed(event, now = Date.now()) {
+  if (!event.voteDeadline) return false;
+  const deadline = new Date(event.voteDeadline).getTime();
+  return Number.isFinite(deadline) && now >= deadline;
+}
+
+function votingClosedError(event) {
+  if (!isVotingClosed(event)) return null;
+  return { status: 403, body: { error: VOTE_CLOSED_MESSAGE, voteDeadline: event.voteDeadline } };
+}
+
+// null/빈 값은 마감 해제. 이미 지난 시각도 받는다. (관리자가 '지금 마감'하려는 경우)
+function normalizeVoteDeadline(raw, now = Date.now()) {
+  if (raw === null || raw === undefined || raw === '') return { deadline: null };
+  const value = String(raw);
+  const time = new Date(value).getTime();
+  if (value.length > 40 || !Number.isFinite(time)) return { error: '마감시간 형식이 올바르지 않습니다.' };
+  if (time > now + VOTE_DEADLINE_MAX_MS) return { error: '마감시간은 지금부터 1년 안으로 정해 주세요.' };
+  return { deadline: new Date(time).toISOString() };
 }
 
 // 관리 비밀번호 검증. 통과하면 null, 실패하면 { status, body } 를 돌려주고 실패 횟수를 저장한다.
@@ -692,6 +727,7 @@ async function handleApi(req, res, url) {
       deleteAuthFailures: 0,
       deleteLockedUntil: null,
       expireDate: null,
+      voteDeadline: null,
       confirmedAt: null,
       confirmedDate: null,
       confirmedTime: null,
@@ -728,6 +764,8 @@ async function handleApi(req, res, url) {
   if (req.method === 'PUT' && parts.length === 4 && parts[1] === 'events' && parts[3] === 'participants') {
     const event = loadEvent(parts[2]);
     if (!event) return sendJson(res, 404, { error: '약속을 찾을 수 없습니다.' });
+    const closed = votingClosedError(event);
+    if (closed) return sendJson(res, closed.status, closed.body);
     const body = await readBody(req);
     const err = validateParticipantInput(body);
     if (err) return sendJson(res, 400, { error: err });
@@ -751,6 +789,8 @@ async function handleApi(req, res, url) {
   if (req.method === 'DELETE' && parts.length === 4 && parts[1] === 'events' && parts[3] === 'participants') {
     const event = loadEvent(parts[2]);
     if (!event) return sendJson(res, 404, { error: '약속을 찾을 수 없습니다.' });
+    const closed = votingClosedError(event);
+    if (closed) return sendJson(res, closed.status, closed.body);
     const name = String(url.searchParams.get('name') || '').trim();
     event.participants = event.participants.filter((p) => p.name !== name);
     // 삭제된 참여자가 넣어둔 장소 투표도 함께 정리한다.
@@ -836,6 +876,31 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, publicEvent(event));
   }
 
+  // POST /api/events/:id/admin-auth - 관리자 메뉴 진입용 관리 비밀번호 확인 { managePin }
+  if (req.method === 'POST' && parts.length === 4 && parts[1] === 'events' && parts[3] === 'admin-auth') {
+    const event = loadEvent(parts[2]);
+    if (!event) return sendJson(res, 404, { error: '약속을 찾을 수 없습니다.' });
+    const body = await readBody(req);
+    const denied = checkManagePin(event, body.managePin == null ? '' : String(body.managePin));
+    if (denied) return sendJson(res, denied.status, denied.body);
+    return sendJson(res, 200, { ok: true });
+  }
+
+  // PUT /api/events/:id/vote-deadline - 투표 마감시간 설정·해제 { managePin, voteDeadline: ISO | null }
+  if (req.method === 'PUT' && parts.length === 4 && parts[1] === 'events' && parts[3] === 'vote-deadline') {
+    const event = loadEvent(parts[2]);
+    if (!event) return sendJson(res, 404, { error: '약속을 찾을 수 없습니다.' });
+    const body = await readBody(req);
+    // 형식 검사를 비밀번호보다 먼저 해서 입력 실수로 잠금 횟수가 깎이지 않게 한다.
+    const result = normalizeVoteDeadline(body.voteDeadline);
+    if (result.error) return sendJson(res, 400, { error: result.error });
+    const denied = checkManagePin(event, body.managePin == null ? '' : String(body.managePin));
+    if (denied) return sendJson(res, denied.status, denied.body);
+    event.voteDeadline = result.deadline;
+    saveEvent(event);
+    return sendJson(res, 200, publicEvent(event));
+  }
+
   // PUT /api/events/:id/reservation-link - 확정된 장소의 예약 앱(웹) 링크 저장 (빈 값이면 삭제)
   if (req.method === 'PUT' && parts.length === 4 && parts[1] === 'events' && parts[3] === 'reservation-link') {
     const event = loadEvent(parts[2]);
@@ -857,6 +922,9 @@ async function handleApi(req, res, url) {
     const event = loadEvent(parts[2]);
     if (!event) return sendJson(res, 404, { error: '약속을 찾을 수 없습니다.' });
     // 장소 정하기는 일정 확정과 병행할 수 있다. (공유만 둘 다 확정된 뒤 가능)
+    // 투표가 마감되면 후보 등록·좋아요·삭제를 모두 막는다.
+    const closed = votingClosedError(event);
+    if (closed) return sendJson(res, closed.status, closed.body);
     if (!Array.isArray(event.places)) event.places = [];
 
     if (req.method === 'POST') {
@@ -898,7 +966,7 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, publicEvent(event));
   }
 
-  // POST /api/events/:id/teams-export - 약속 요약을 Teams 채널 웹후크로 전송 (URL은 저장하지 않음)
+  // POST /api/events/:id/teams-export - 약속 요약을 Teams 채널 웹후크로 전송 (관리자 메뉴, URL은 저장하지 않음)
   if (req.method === 'POST' && parts.length === 4 && parts[1] === 'events' && parts[3] === 'teams-export') {
     const event = loadEvent(parts[2]);
     if (!event) return sendJson(res, 404, { error: '약속을 찾을 수 없습니다.' });
@@ -909,6 +977,9 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const webhook = validateTeamsWebhookUrl(body.webhookUrl);
     if (webhook.error) return sendJson(res, 400, { error: webhook.error });
+    // 자동 게시는 관리자 메뉴 기능이라 관리 비밀번호가 필요하다.
+    const denied = checkManagePin(event, body.managePin == null ? '' : String(body.managePin));
+    if (denied) return sendJson(res, denied.status, denied.body);
 
     // 같은 약속이 연달아 채널에 올라가지 않도록 짧은 쿨다운을 둔다.
     const now = Date.now();

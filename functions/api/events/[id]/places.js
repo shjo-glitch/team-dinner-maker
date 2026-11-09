@@ -1,7 +1,7 @@
 // POST   /api/events/:id/places                  - 후보 장소 등록
 // PUT    /api/events/:id/places                  - 후보 장소 투표 토글
 // DELETE /api/events/:id/places?placeId=...       - 후보 장소 삭제
-import { MAX_PLACES, isSamePlace, loadEvent, publicEvent, readJson, saveEvent, validatePlaceInput } from '../../_shared.js';
+import { MAX_PLACES, isSamePlace, loadEvent, publicEvent, readJson, saveEvent, validatePlaceInput, votingClosedResponse } from '../../_shared.js';
 
 // 장소 정하기는 일정 확정과 병행할 수 있다. (공유만 둘 다 확정된 뒤 가능)
 async function loadPlaceEvent(env, id) {
@@ -9,6 +9,9 @@ async function loadPlaceEvent(env, id) {
   if (!event) {
     return { error: Response.json({ error: '약속을 찾을 수 없습니다.' }, { status: 404 }) };
   }
+  // 투표가 마감되면 후보 등록·좋아요·삭제를 모두 막는다.
+  const closed = votingClosedResponse(event);
+  if (closed) return { error: closed };
   if (!Array.isArray(event.places)) event.places = [];
   return { event };
 }

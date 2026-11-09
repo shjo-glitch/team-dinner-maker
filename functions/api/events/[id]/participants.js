@@ -1,12 +1,14 @@
 // PUT    /api/events/:id/participants        - 참여자 일정 등록/수정 (이름 기준 upsert)
 // DELETE /api/events/:id/participants?name=x - 참여자 삭제
-import { DATE_RE, loadEvent, publicEvent, readJson, refreshExpireDate, saveEvent } from '../../_shared.js';
+import { DATE_RE, loadEvent, publicEvent, readJson, refreshExpireDate, saveEvent, votingClosedResponse } from '../../_shared.js';
 
 export async function onRequestPut({ request, params, env }) {
   const event = await loadEvent(env, params.id);
   if (!event) {
     return Response.json({ error: '약속을 찾을 수 없습니다.' }, { status: 404 });
   }
+  const closed = votingClosedResponse(event);
+  if (closed) return closed;
 
   const { body, error } = await readJson(request);
   if (error) return error;
@@ -40,6 +42,8 @@ export async function onRequestDelete({ request, params, env }) {
   if (!event) {
     return Response.json({ error: '약속을 찾을 수 없습니다.' }, { status: 404 });
   }
+  const closed = votingClosedResponse(event);
+  if (closed) return closed;
   const name = String(new URL(request.url).searchParams.get('name') || '').trim();
   event.participants = event.participants.filter((p) => p.name !== name);
   // 삭제된 참여자가 넣어둔 장소 투표도 함께 정리한다.

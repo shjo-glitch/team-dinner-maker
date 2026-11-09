@@ -1,8 +1,9 @@
-// POST /api/events/:id/teams-export - 약속 요약을 Teams 채널 웹후크로 보낸다.
-// 웹후크 URL은 저장하지 않고 요청마다 받아 이번 전송에만 쓴다.
+// POST /api/events/:id/teams-export - 약속 요약을 Teams 채널 웹후크로 보낸다. (관리자 메뉴 › 자동 게시)
+// 웹후크 URL은 저장하지 않고 요청마다 받아 이번 전송에만 쓴다. 관리 비밀번호가 필요하다.
 import {
   TEAMS_EXPORT_COOLDOWN_MS,
   buildWebhookPayload,
+  checkManagePin,
   isFullyConfirmed,
   loadEvent,
   postToTeams,
@@ -30,6 +31,9 @@ export async function onRequestPost({ request, params, env }) {
   if (webhook.error) {
     return Response.json({ error: webhook.error }, { status: 400 });
   }
+
+  const denied = await checkManagePin(env, event, body.managePin == null ? '' : String(body.managePin));
+  if (denied) return denied;
 
   // 같은 약속이 연달아 채널에 올라가지 않도록 짧은 쿨다운을 둔다.
   const now = Date.now();

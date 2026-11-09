@@ -46,6 +46,7 @@ export async function onRequestPost({ request, env }) {
     deleteAuthFailures: 0,
     deleteLockedUntil: null,
     expireDate: null,
+    voteDeadline: null,
     confirmedAt: null,
     confirmedTime: null,
     createdAt: new Date().toISOString(),

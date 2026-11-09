@@ -50,6 +50,32 @@ function isFullyConfirmed() {
   return isScheduleConfirmed() && Boolean(confirmedPlace());
 }
 
+// ---- 투표 마감 ----
+// 마감시간이 지나면 날짜 투표(일정 등록·수정·삭제)와 장소 투표(후보 등록·좋아요·삭제)를 막는다.
+// (서버 isVotingClosed 와 같은 규칙. 서버도 403 으로 거부한다)
+function isVotingClosed() {
+  if (!eventData || !eventData.voteDeadline) return false;
+  const deadline = new Date(eventData.voteDeadline).getTime();
+  return Number.isFinite(deadline) && Date.now() >= deadline;
+}
+
+// ISO -> '11/14(금) 오후 6:00' (보는 사람의 브라우저 시간대 기준)
+function formatDeadline(iso) {
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return '';
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${date.getMonth() + 1}/${date.getDate()}(${DOW_LABELS[date.getDay()]}) ${formatMeetTime(`${hh}:${mm}`)}`;
+}
+
+// ISO -> datetime-local 입력값 'YYYY-MM-DDTHH:MM' (로컬 시간)
+function toDatetimeLocalValue(iso) {
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 // 1단계(만들기)는 이 페이지에 들어온 시점에 이미 끝나 있다.
 // 2단계(일정 & 장소 정하기)는 일정·장소 확정을 병행하고, 둘 다 끝나면 3단계(공유하기).
 function currentStep() {
@@ -218,6 +244,14 @@ function renderHead() {
   const meetTime = meetTimeLabel();
   $('event-time').hidden = !meetTime;
   $('event-time').textContent = meetTime ? `🕖 ${meetTime} 만남` : '';
+  const deadlineChip = $('event-deadline');
+  deadlineChip.hidden = !eventData.voteDeadline;
+  deadlineChip.classList.toggle('closed', isVotingClosed());
+  deadlineChip.textContent = !eventData.voteDeadline
+    ? ''
+    : isVotingClosed()
+      ? '🔒 투표 마감됨'
+      : `⏰ ${formatDeadline(eventData.voteDeadline)} 투표 마감`;
 }
 
 function isAtCapacity() {
@@ -228,9 +262,16 @@ function syncNameInputState() {
   const nameInput = $('name');
   const hint = $('name-hint');
   const atCapacity = isAtCapacity();
+  const closed = isVotingClosed();
 
-  nameInput.disabled = atCapacity;
-  if (activeParticipantName) {
+  nameInput.disabled = atCapacity || closed;
+  if (closed) {
+    nameInput.value = '';
+    nameInput.placeholder = '투표 마감';
+    hint.textContent = activeParticipantName
+      ? `투표가 마감돼 ${activeParticipantName} 님의 일정은 볼 수만 있어요.`
+      : '투표가 마감돼 새 참여자 등록과 일정 수정을 할 수 없어요. 참여자 이름을 누르면 일정을 볼 수 있어요.';
+  } else if (activeParticipantName) {
     nameInput.placeholder = `${activeParticipantName} 님 일정 수정 중`;
     hint.textContent = `${activeParticipantName} 님의 일정을 수정 중이에요. 이름을 다시 누르면 선택이 해제돼요.`;
   } else if (atCapacity) {
@@ -246,7 +287,7 @@ function syncNameInputState() {
 function updateSaveState() {
   const hasScheduleOwner = Boolean(activeParticipantName);
   const hasSelectedDates = voteCal && voteCal.selected.size > 0;
-  const disabled = !hasScheduleOwner || !hasSelectedDates;
+  const disabled = !hasScheduleOwner || !hasSelectedDates || isVotingClosed();
   $('save-btn').disabled = disabled;
   $('float-save-btn').disabled = disabled;
 }
@@ -257,6 +298,7 @@ function renderVotePeople() {
     wrap.innerHTML = '<span class="empty-note">아직 아무도 등록하지 않았어요. 첫 번째로 등록해 보세요!</span>';
     return;
   }
+  const closed = isVotingClosed();
   wrap.innerHTML = eventData.participants
     .map(
       (p) => {
@@ -264,7 +306,7 @@ function renderVotePeople() {
         return `
         <span class="person-chip${active ? ' active' : ''}" data-name="${esc(p.name)}" role="button" tabindex="0" aria-pressed="${active}">
           ${esc(p.name)}
-          <button type="button" class="del" data-del="${esc(p.name)}" title="삭제">✕</button>
+          ${closed ? '' : `<button type="button" class="del" data-del="${esc(p.name)}" title="삭제">✕</button>`}
         </span>`;
       }
     )
@@ -460,7 +502,10 @@ async function saveMySchedule() {
       body: JSON.stringify({ name, dates }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || '저장하지 못했습니다.');
+    if (!res.ok) {
+      applyVoteClosedResponse(data);
+      throw new Error(data.error || '저장하지 못했습니다.');
+    }
     eventData = data;
     // 방금 등록한 사람을 장소 투표자로도 기억해 둔다.
     if (!activeVoterName) {
@@ -527,20 +572,24 @@ function activateParticipant(name) {
 async function deleteParticipant(name) {
   if (!confirm(`'${name}' 님의 일정을 삭제할까요?`)) return;
   const res = await fetch(`/api/events/${eventId}/participants?name=${encodeURIComponent(name)}`, { method: 'DELETE' });
-  if (res.ok) {
-    eventData = await res.json();
-    if (activeParticipantName === name) {
-      activeParticipantName = null;
-      $('name').value = '';
-      voteCal.setSelected([]);
-      syncCalendarVisibility();
-    }
-    renderHead();
-    renderVotePeople();
-    syncNameInputState();
-    voteCal.render();
-    updateSelectedCount(voteCal.selected.size);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    applyVoteClosedResponse(data);
+    $('vote-error').textContent = data.error || '일정을 삭제하지 못했어요.';
+    return;
   }
+  eventData = await res.json();
+  if (activeParticipantName === name) {
+    activeParticipantName = null;
+    $('name').value = '';
+    voteCal.setSelected([]);
+    syncCalendarVisibility();
+  }
+  renderHead();
+  renderVotePeople();
+  syncNameInputState();
+  voteCal.render();
+  updateSelectedCount(voteCal.selected.size);
 }
 
 function formatLockRemaining(lockedUntil) {
@@ -555,10 +604,10 @@ function setSwitchState(button, on, label) {
   button.querySelector('.toggle-label').textContent = label;
 }
 
-// 파기·확정이 같은 관리 비밀번호 잠금을 공유하므로 버튼들을 함께 잠근다.
+// 관리자 메뉴·확정이 같은 관리 비밀번호 잠금을 공유하므로 버튼들을 함께 잠근다.
 function syncManageLockState() {
   clearTimeout(cancelButtonTimer);
-  const cancelButton = $('cancel-event');
+  const adminButton = $('admin-menu');
   const scheduleSwitch = $('confirm-event');
   const placeSwitch = $('confirm-place-toggle');
   const lockedUntil = eventData.deleteLockedUntil;
@@ -566,13 +615,13 @@ function syncManageLockState() {
 
   if (isLocked) {
     const remaining = `${formatLockRemaining(lockedUntil)} 후 재시도`;
-    cancelButton.disabled = true;
-    cancelButton.textContent = remaining;
+    adminButton.disabled = true;
+    adminButton.textContent = `⚙️ ${remaining}`;
     setSwitchState(scheduleSwitch, isScheduleConfirmed(), remaining);
     setSwitchState(placeSwitch, Boolean(confirmedPlace()), remaining);
   } else {
-    cancelButton.disabled = false;
-    cancelButton.textContent = '약속 파기하기';
+    adminButton.disabled = false;
+    adminButton.textContent = '⚙️ 관리자 메뉴';
     // 스위치 ON = 확정됨(누르면 다시 정하기), OFF = 미확정(누르면 확정하기)
     setSwitchState(scheduleSwitch, isScheduleConfirmed(), isScheduleConfirmed() ? '일정 다시 정하기' : '일정 확정하기');
     setSwitchState(placeSwitch, Boolean(confirmedPlace()), confirmedPlace() ? '장소 다시 정하기' : '장소 확정하기');
@@ -580,7 +629,7 @@ function syncManageLockState() {
   scheduleSwitch.disabled = isLocked;
   placeSwitch.disabled = isLocked;
 
-  for (const id of ['cancel-confirm', 'cancel-pin', 'confirm-submit', 'confirm-pin', 'place-dialog-submit', 'place-confirm-pin']) {
+  for (const id of ['confirm-submit', 'confirm-pin', 'place-dialog-submit', 'place-confirm-pin', 'admin-auth-submit', 'admin-pin']) {
     $(id).disabled = isLocked;
   }
   if (isLocked) cancelButtonTimer = setTimeout(syncManageLockState, 1000);
@@ -593,14 +642,225 @@ function syncConfirmState() {
   renderHead();
   renderSteps();
   syncManageLockState();
+  syncVotingClosedState();
+  if (isAdminSettingsOpen()) renderAdminSettings();
 }
 
-function openCancelDialog() {
-  const dialog = $('cancel-dialog');
-  $('cancel-pin').value = '';
-  $('cancel-error').textContent = '';
-  dialog.showModal();
-  $('cancel-pin').focus();
+// 마감 여부가 바뀌는 순간(마감시간 도래, 관리자가 설정·해제) 투표 관련 화면을 다시 그린다.
+let lastVotingClosed = null;
+let voteDeadlineTimer = null;
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+
+function syncVotingClosedState() {
+  clearTimeout(voteDeadlineTimer);
+  const closed = isVotingClosed();
+  const note = $('vote-closed-note');
+  note.hidden = !closed;
+  note.textContent = closed
+    ? `🔒 ${formatDeadline(eventData.voteDeadline)}에 투표가 마감됐어요. 일정·장소 투표는 바꿀 수 없고, 결과는 그대로 볼 수 있어요.`
+    : '';
+  for (const id of ['place-query', 'place-link', 'place-search-btn']) $(id).disabled = closed;
+  if (!closed && !appConfig.placeSearchEnabled) $('place-search-btn').disabled = true;
+
+  if (lastVotingClosed !== null && lastVotingClosed !== closed) {
+    renderHead();
+    renderVotePeople();
+    syncNameInputState();
+    voteCal.render();
+    updateSaveState();
+    if (!$('panel-place').hidden) {
+      renderVoterChips();
+      renderPlaceList();
+    }
+  }
+  lastVotingClosed = closed;
+  updatePlaceAddButton();
+
+  // 페이지를 열어 둔 채 마감시간이 지나면 그 순간 잠근다. (setTimeout 최대치를 넘으면 나눠서 기다린다)
+  if (!closed && eventData.voteDeadline) {
+    const wait = new Date(eventData.voteDeadline).getTime() - Date.now();
+    voteDeadlineTimer = setTimeout(syncConfirmState, Math.min(Math.max(wait, 0) + 50, MAX_TIMEOUT_MS));
+  }
+}
+
+// 서버가 '투표 마감'(403)으로 거부했으면 마감시간을 반영하고 화면을 잠근다. 반영했으면 true.
+function applyVoteClosedResponse(data) {
+  if (!data || !data.voteDeadline) return false;
+  eventData.voteDeadline = data.voteDeadline;
+  syncConfirmState();
+  return true;
+}
+
+// ---- 관리자 메뉴 ----
+// 1단계: 관리 비밀번호 확인(admin-auth) → 2단계: 관리자 설정(투표 마감시간 · 자동 게시 · 약속 파기).
+// 확인된 비밀번호는 다이얼로그가 열려 있는 동안 메모리에만 두고, 닫으면 지운다. (저장하지 않음)
+let adminPin = null;
+let adminInfoTimer = null;
+
+function isAdminSettingsOpen() {
+  return $('admin-dialog').open && !$('admin-settings').hidden;
+}
+
+function openAdminDialog() {
+  adminPin = null;
+  $('admin-auth-form').hidden = false;
+  $('admin-settings').hidden = true;
+  $('admin-pin').value = '';
+  $('admin-auth-error').textContent = '';
+  $('admin-dialog').showModal();
+  $('admin-pin').focus();
+}
+
+// 설정 화면에서 요청이 비밀번호 문제(401/429/409)로 거부되면 인증 화면으로 되돌린다.
+function backToAdminAuth(data) {
+  adminPin = null;
+  if (data && data.deleteLockedUntil) {
+    eventData.deleteLockedUntil = data.deleteLockedUntil;
+    syncManageLockState();
+  }
+  $('admin-settings').hidden = true;
+  $('admin-auth-form').hidden = false;
+  $('admin-pin').value = '';
+  $('admin-auth-error').textContent = (data && data.error) || '관리 비밀번호를 다시 입력해 주세요.';
+  $('admin-pin').focus();
+}
+
+function isAdminAuthFailure(res) {
+  return res.status === 401 || res.status === 429;
+}
+
+async function submitAdminAuth(e) {
+  e.preventDefault();
+  const pin = $('admin-pin').value;
+  const errorEl = $('admin-auth-error');
+  errorEl.textContent = '';
+  if (!/^\d{4,6}$/.test(pin)) {
+    errorEl.textContent = '관리 비밀번호는 숫자 4~6자리로 입력해 주세요.';
+    $('admin-pin').focus();
+    return;
+  }
+  const button = $('admin-auth-submit');
+  button.disabled = true;
+  button.textContent = '확인하는 중…';
+  try {
+    const res = await fetch(`/api/events/${eventId}/admin-auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ managePin: pin }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data.deleteLockedUntil) {
+      eventData.deleteLockedUntil = data.deleteLockedUntil;
+    } else if (res.ok && eventData.deleteLockedUntil) {
+      eventData.deleteLockedUntil = null; // 맞히면 서버가 실패 횟수·잠금을 풀어 준다
+    }
+    if (!res.ok) throw new Error(data.error || '관리 비밀번호를 확인하지 못했어요.');
+    adminPin = pin;
+    showAdminSettings();
+  } catch (err) {
+    errorEl.textContent = err.message || '관리 비밀번호를 확인하지 못했어요. 다시 시도해 주세요.';
+    $('admin-pin').select();
+  } finally {
+    button.textContent = '확인';
+    syncManageLockState();
+  }
+}
+
+function showAdminSettings() {
+  $('admin-auth-form').hidden = true;
+  $('admin-settings').hidden = false;
+  // 투표 마감시간
+  $('admin-deadline').value = eventData.voteDeadline ? toDatetimeLocalValue(eventData.voteDeadline) : '';
+  $('admin-deadline-error').textContent = '';
+  $('admin-deadline-info').textContent = '';
+  // 자동 게시
+  const storedWebhook = readStoredWebhook();
+  $('teams-webhook').value = storedWebhook;
+  $('teams-webhook-clear').hidden = !storedWebhook;
+  $('teams-note').value = '';
+  $('teams-error').textContent = '';
+  $('teams-info').textContent = '';
+  $('teams-advanced').open = false;
+  // 약속 파기
+  resetCancelConfirm();
+  renderAdminSettings();
+  $('admin-settings').scrollTop = 0;
+  $('admin-deadline').focus();
+}
+
+// 다른 사람이 바꾼 내용(마감시간·확정 상태)을 열려 있는 설정 화면에 반영한다. 입력 중인 값은 건드리지 않는다.
+function renderAdminSettings() {
+  $('admin-deadline-clear').hidden = !eventData.voteDeadline;
+  renderAdminDeadlineHint();
+  const shareable = isFullyConfirmed();
+  $('teams-locked-note').hidden = shareable;
+  $('teams-form').hidden = !shareable;
+  if (shareable) renderTeamsPreview();
+}
+
+// 한 줄 레이아웃이라 부제목에는 현재 상태만 짧게 보여 준다.
+function renderAdminDeadlineHint() {
+  const hint = $('admin-deadline-hint');
+  const value = $('admin-deadline').value;
+  const picked = value ? new Date(value).getTime() : NaN;
+  const pickedPast = Number.isFinite(picked) && picked <= Date.now();
+  $('admin-deadline-submit').textContent = pickedPast ? '지금 마감' : '저장';
+  hint.classList.toggle('warn', pickedPast);
+
+  if (pickedPast) hint.textContent = '지난 시각이라 저장하면 바로 마감돼요.';
+  else if (!eventData.voteDeadline) hint.textContent = '마감시간 없음 · 언제든 투표할 수 있어요.';
+  else if (isVotingClosed()) hint.textContent = `${formatDeadline(eventData.voteDeadline)}에 마감됐어요. 뒤로 미루면 다시 열려요.`;
+  else hint.textContent = `${formatDeadline(eventData.voteDeadline)}에 일정·장소 투표가 마감돼요.`;
+}
+
+async function saveVoteDeadline(voteDeadline, button) {
+  const errorEl = $('admin-deadline-error');
+  const infoEl = $('admin-deadline-info');
+  errorEl.textContent = '';
+  infoEl.textContent = '';
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = '저장하는 중…';
+  try {
+    const res = await fetch(`/api/events/${eventId}/vote-deadline`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ managePin: adminPin, voteDeadline }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (isAdminAuthFailure(res)) {
+      backToAdminAuth(data);
+      return;
+    }
+    if (!res.ok) throw new Error(data.error || '마감시간을 저장하지 못했어요.');
+    eventData = data;
+    syncConfirmState();
+    $('admin-deadline').value = eventData.voteDeadline ? toDatetimeLocalValue(eventData.voteDeadline) : '';
+    renderAdminSettings();
+    // 상태는 부제목에 나오므로 결과만 짧게 알린다.
+    infoEl.textContent = !eventData.voteDeadline ? '마감을 해제했어요.' : isVotingClosed() ? '투표를 마감했어요.' : '마감시간을 저장했어요.';
+    // 한 줄 레이아웃을 유지하도록 안내는 잠깐만 보여 준다.
+    clearTimeout(adminInfoTimer);
+    adminInfoTimer = setTimeout(() => (infoEl.textContent = ''), 2500);
+  } catch (err) {
+    errorEl.textContent = err.message || '마감시간을 저장하지 못했어요. 다시 시도해 주세요.';
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+    renderAdminDeadlineHint();
+  }
+}
+
+function submitAdminDeadline(e) {
+  e.preventDefault();
+  const value = $('admin-deadline').value;
+  const time = value ? new Date(value).getTime() : NaN;
+  if (!Number.isFinite(time)) {
+    $('admin-deadline-error').textContent = '투표 마감시간을 골라 주세요. 마감을 없애려면 [마감 해제]를 눌러요.';
+    $('admin-deadline').focus();
+    return;
+  }
+  saveVoteDeadline(new Date(time).toISOString(), $('admin-deadline-submit'));
 }
 
 function returnHome() {
@@ -608,22 +868,42 @@ function returnHome() {
 }
 
 function showCancelSuccess() {
-  $('cancel-dialog').close();
+  adminPin = null;
+  $('admin-dialog').close();
   $('cancel-success-dialog').showModal();
   $('cancel-success-home').focus();
 }
 
-async function cancelEvent(e) {
-  e.preventDefault();
-  const pin = $('cancel-pin').value;
+// 관리자 설정 › 약속 파기하기 → 같은 줄에서 [취소][파기하기]로 바뀌어 한 번 더 확인 → 파기
+const CANCEL_SUB_TEXT = '참여자 일정과 결과가 모두 삭제되며, 되돌릴 수 없어요.';
+
+function setCancelConfirming(confirming) {
+  $('admin-cancel-row').classList.toggle('confirming', confirming);
+  $('cancel-sub').textContent = confirming ? '정말 파기할까요? 참여자 일정과 결과가 모두 삭제돼요.' : CANCEL_SUB_TEXT;
+  $('cancel-event').hidden = confirming;
+  $('cancel-confirm-back').hidden = !confirming;
+  $('cancel-confirm').hidden = !confirming;
+}
+
+function resetCancelConfirm() {
+  setCancelConfirming(false);
+  $('cancel-error').textContent = '';
+}
+
+function askCancelEvent() {
+  $('cancel-error').textContent = '';
+  setCancelConfirming(true);
+  $('cancel-confirm-back').focus();
+}
+
+function closeCancelConfirm() {
+  setCancelConfirming(false);
+  $('cancel-event').focus();
+}
+
+async function cancelEvent() {
   const errorEl = $('cancel-error');
   errorEl.textContent = '';
-  if (!/^\d{4,6}$/.test(pin)) {
-    errorEl.textContent = '관리 비밀번호는 숫자 4~6자리로 입력해 주세요.';
-    $('cancel-pin').focus();
-    return;
-  }
-
   const confirmButton = $('cancel-confirm');
   const originalLabel = confirmButton.textContent;
   confirmButton.disabled = true;
@@ -633,22 +913,21 @@ async function cancelEvent(e) {
     const res = await fetch(`/api/events/${eventId}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ managePin: pin }),
+      body: JSON.stringify({ managePin: adminPin }),
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok || res.status === 404) {
       showCancelSuccess();
       return;
     }
-    if (data.deleteLockedUntil) {
-      eventData.deleteLockedUntil = data.deleteLockedUntil;
-      syncManageLockState();
-      $('cancel-dialog').close();
+    if (isAdminAuthFailure(res)) {
+      backToAdminAuth(data);
       return;
     }
     throw new Error(data.error || '약속을 파기하지 못했습니다.');
   } catch (err) {
     errorEl.textContent = err.message || '약속을 파기하지 못했습니다. 다시 시도해 주세요.';
+  } finally {
     confirmButton.disabled = false;
     confirmButton.textContent = originalLabel;
   }
@@ -709,6 +988,10 @@ function renderVoterChips() {
       return `<span class="person-chip${active ? ' active' : ''}" data-voter="${esc(p.name)}" role="button" tabindex="0" aria-pressed="${active}">${esc(p.name)}</span>`;
     })
     .join('');
+  if (isVotingClosed()) {
+    hint.textContent = '투표가 마감돼 후보 등록과 투표를 할 수 없어요.';
+    return;
+  }
   hint.textContent = activeVoterName
     ? `${activeVoterName} 님으로 투표하고 있어요. 이름을 다시 누르면 해제돼요.`
     : '이름을 선택하면 투표할 수 있어요.';
@@ -729,6 +1012,7 @@ function renderPlaceList() {
     wrap.innerHTML = '<span class="empty-note">아직 등록된 후보지가 없어요. 위에서 검색해 첫 후보를 등록해 보세요!</span>';
     return;
   }
+  const closed = isVotingClosed();
   wrap.innerHTML = places
     .map((place, index) => {
       const votes = place.votes || [];
@@ -748,11 +1032,11 @@ function renderPlaceList() {
             }</div>
           </div>
           <div class="place-actions">
-            <button type="button" class="vote-btn${voted ? ' voted' : ''}" data-vote="${esc(place.id)}" aria-pressed="${voted}">
+            <button type="button" class="vote-btn${voted ? ' voted' : ''}" data-vote="${esc(place.id)}" aria-pressed="${voted}"${closed ? ' disabled title="투표가 마감됐어요"' : ''}>
               <span aria-hidden="true">${voted ? '♥' : '♡'}</span> ${votes.length}
             </button>
             <a class="place-link" href="${esc(placeMapLink(place))}" target="_blank" rel="noopener noreferrer">지도 ↗</a>
-            <button type="button" class="place-del" data-place-del="${esc(place.id)}" title="후보에서 삭제">✕</button>
+            ${closed ? '' : `<button type="button" class="place-del" data-place-del="${esc(place.id)}" title="후보에서 삭제">✕</button>`}
           </div>
           <div class="place-card-footer">
             <button type="button" class="place-confirm-btn${isConfirmed ? ' confirmed' : ''}" data-place-confirm="${esc(place.id)}">
@@ -835,7 +1119,7 @@ function isManualPlaceEntry() {
 function updatePlaceAddButton() {
   const button = $('place-add-btn');
   const manual = isManualPlaceEntry();
-  button.disabled = selectedResultIndex === null && !manual;
+  button.disabled = isVotingClosed() || (selectedResultIndex === null && !manual);
   button.querySelector('span').textContent = manual ? '입력한 이름으로 후보 등록' : '후보로 등록';
 }
 
@@ -1006,7 +1290,10 @@ async function addPlace() {
       body: JSON.stringify({ ...item, link: $('place-link').value.trim(), addedBy: activeVoterName || '' }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || '후보지를 등록하지 못했어요.');
+    if (!res.ok) {
+      applyVoteClosedResponse(data);
+      throw new Error(data.error || '후보지를 등록하지 못했어요.');
+    }
     eventData = data;
     searchResults = [];
     selectedResultIndex = null;
@@ -1071,6 +1358,7 @@ async function votePlace(placeId) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
+    applyVoteClosedResponse(data);
     errorEl.textContent = data.error || '투표하지 못했어요.';
     return;
   }
@@ -1083,7 +1371,12 @@ async function deletePlace(placeId) {
   const place = (eventData.places || []).find((candidate) => candidate.id === placeId);
   if (!place || !confirm(`'${place.name}' 을(를) 후보에서 삭제할까요?`)) return;
   const res = await fetch(`/api/events/${eventId}/places?placeId=${encodeURIComponent(placeId)}`, { method: 'DELETE' });
-  if (!res.ok) return;
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    applyVoteClosedResponse(data);
+    $('place-error').textContent = data.error || '후보지를 삭제하지 못했어요.';
+    return;
+  }
   eventData = await res.json();
   // 확정된 장소를 지웠다면 공유 단계도 함께 닫혀야 한다.
   syncConfirmState();
@@ -1649,15 +1942,7 @@ function maybeEnterShareStep(wasFullyConfirmed) {
 }
 
 function openTeamsDialog() {
-  const storedWebhook = readStoredWebhook();
-  $('teams-webhook').value = storedWebhook;
-  $('teams-webhook-clear').hidden = !storedWebhook;
-  $('teams-note').value = '';
-  $('teams-error').textContent = '';
-  $('teams-info').textContent = '';
-  $('teams-advanced').open = false;
   renderLinkPreview();
-  renderTeamsPreview();
   renderShareLauncher();
   renderKakaoHint();
   $('teams-dialog').showModal();
@@ -1685,9 +1970,13 @@ async function submitTeamsExport(e) {
     const res = await fetch(`/api/events/${eventId}/teams-export`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ webhookUrl, note: $('teams-note').value.trim() }),
+      body: JSON.stringify({ webhookUrl, note: $('teams-note').value.trim(), managePin: adminPin }),
     });
     const data = await res.json().catch(() => ({}));
+    if (isAdminAuthFailure(res)) {
+      backToAdminAuth(data);
+      return;
+    }
     // 서버의 URL 형식 검증(400)을 통과했다면 브라우저에 기억해 둔다.
     // (401 등 워크플로 설정 문제는 URL 자체는 맞는 경우라 함께 기억한다)
     if (res.status !== 400) {
@@ -1696,7 +1985,6 @@ async function submitTeamsExport(e) {
     }
     if (!res.ok) throw new Error(data.error || '내보내지 못했어요.');
     infoEl.textContent = '채널로 보냈어요! 팀즈에서 확인해 주세요.';
-    setTimeout(() => $('teams-dialog').close(), 1400);
   } catch (err) {
     errorEl.textContent = err.message;
   } finally {
@@ -1772,7 +2060,7 @@ async function init() {
     mode: 'select',
     startDate: range.startDate,
     endDate: range.endDate,
-    canSelect: () => Boolean(activeParticipantName),
+    canSelect: () => Boolean(activeParticipantName) && !isVotingClosed(),
     onChange: (sel) => {
       updateSelectedCount(sel.size);
     },
@@ -1833,7 +2121,7 @@ async function init() {
     }
     setTimeout(() => ($('copy-link').textContent = '🔗 참여 링크 복사'), 1500);
   });
-  $('teams-dialog-form').addEventListener('submit', submitTeamsExport);
+  $('teams-form').addEventListener('submit', submitTeamsExport);
   $('teams-dialog-close').addEventListener('click', () => $('teams-dialog').close());
   $('kakao-share-btn').addEventListener('click', shareToKakao);
   $('teams-webhook-clear').addEventListener('click', () => {
@@ -1923,9 +2211,24 @@ async function init() {
   });
   window.addEventListener('focus', syncEventData);
 
-  $('cancel-event').addEventListener('click', openCancelDialog);
-  $('cancel-dialog-form').addEventListener('submit', cancelEvent);
-  $('cancel-dialog-close').addEventListener('click', () => $('cancel-dialog').close());
+  $('admin-menu').addEventListener('click', openAdminDialog);
+  $('admin-auth-form').addEventListener('submit', submitAdminAuth);
+  $('admin-auth-close').addEventListener('click', () => $('admin-dialog').close());
+  $('admin-dialog-close').addEventListener('click', () => $('admin-dialog').close());
+  // 닫으면(ESC 포함) 확인된 비밀번호를 잊는다. 다음에 열 때 다시 확인한다.
+  $('admin-dialog').addEventListener('close', () => {
+    adminPin = null;
+  });
+  $('admin-deadline-form').addEventListener('submit', submitAdminDeadline);
+  $('admin-deadline').addEventListener('input', renderAdminDeadlineHint);
+  $('admin-deadline-clear').addEventListener('click', () => saveVoteDeadline(null, $('admin-deadline-clear')));
+
+  $('teams-advanced').addEventListener('toggle', () => {
+    $('teams-expand-label').textContent = $('teams-advanced').open ? '접기' : '설정 열기';
+  });
+  $('cancel-event').addEventListener('click', askCancelEvent);
+  $('cancel-confirm-back').addEventListener('click', closeCancelConfirm);
+  $('cancel-confirm').addEventListener('click', cancelEvent);
   $('cancel-success-home').addEventListener('click', returnHome);
   $('cancel-success-dialog').addEventListener('cancel', (e) => {
     e.preventDefault();

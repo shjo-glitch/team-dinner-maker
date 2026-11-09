@@ -233,10 +233,14 @@ async function main() {
     await shot('04-result.png', { fullPage: true });
     console.log('04-result.png');
 
-    // ---------- 07. 약속 파기 확인 창 ----------
+    // ---------- 07. 관리자 메뉴 › 약속 파기 확인 ----------
+    await page.click('#admin-menu');
+    await page.waitForFunction(() => document.getElementById('admin-dialog').open);
+    await page.type('#admin-pin', MANAGE_PIN);
+    await page.click('#admin-auth-submit');
+    await page.waitForFunction(() => !document.getElementById('admin-settings').hidden);
     await page.click('#cancel-event');
-    await page.waitForFunction(() => document.getElementById('cancel-dialog').open);
-    await page.type('#cancel-pin', MANAGE_PIN);
+    await page.evaluate(() => document.getElementById('admin-cancel-row').scrollIntoView({ block: 'center' }));
     await sleep(500);
     await shot('07-cancel-event.png');
     console.log('07-cancel-event.png');
