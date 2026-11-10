@@ -72,8 +72,8 @@ export function votingClosedResponse(event) {
   return Response.json({ error: VOTE_CLOSED_MESSAGE, voteDeadline: event.voteDeadline }, { status: 403 });
 }
 
-// 관리자가 넣은 마감시간 검증. null/빈 값은 마감 해제.
-// 이미 지난 시각도 받는다. (관리자가 '지금 마감'하려는 경우)
+// 모임장이 넣은 마감시간 검증. null/빈 값은 마감 해제.
+// 이미 지난 시각도 받는다. (모임장이 '지금 마감'하려는 경우)
 export function normalizeVoteDeadline(raw, now = Date.now()) {
   if (raw === null || raw === undefined || raw === '') return { deadline: null };
   const value = String(raw);

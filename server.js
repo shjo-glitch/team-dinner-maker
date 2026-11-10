@@ -161,7 +161,7 @@ function votingClosedError(event) {
   return { status: 403, body: { error: VOTE_CLOSED_MESSAGE, voteDeadline: event.voteDeadline } };
 }
 
-// null/빈 값은 마감 해제. 이미 지난 시각도 받는다. (관리자가 '지금 마감'하려는 경우)
+// null/빈 값은 마감 해제. 이미 지난 시각도 받는다. (모임장이 '지금 마감'하려는 경우)
 function normalizeVoteDeadline(raw, now = Date.now()) {
   if (raw === null || raw === undefined || raw === '') return { deadline: null };
   const value = String(raw);
@@ -876,7 +876,7 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, publicEvent(event));
   }
 
-  // POST /api/events/:id/admin-auth - 관리자 메뉴 진입용 관리 비밀번호 확인 { managePin }
+  // POST /api/events/:id/admin-auth - 모임장 메뉴 진입용 관리 비밀번호 확인 { managePin }
   if (req.method === 'POST' && parts.length === 4 && parts[1] === 'events' && parts[3] === 'admin-auth') {
     const event = loadEvent(parts[2]);
     if (!event) return sendJson(res, 404, { error: '약속을 찾을 수 없습니다.' });
@@ -966,7 +966,7 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, publicEvent(event));
   }
 
-  // POST /api/events/:id/teams-export - 약속 요약을 Teams 채널 웹후크로 전송 (관리자 메뉴, URL은 저장하지 않음)
+  // POST /api/events/:id/teams-export - 약속 요약을 Teams 채널 웹후크로 전송 (모임장 메뉴, URL은 저장하지 않음)
   if (req.method === 'POST' && parts.length === 4 && parts[1] === 'events' && parts[3] === 'teams-export') {
     const event = loadEvent(parts[2]);
     if (!event) return sendJson(res, 404, { error: '약속을 찾을 수 없습니다.' });
@@ -977,7 +977,7 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const webhook = validateTeamsWebhookUrl(body.webhookUrl);
     if (webhook.error) return sendJson(res, 400, { error: webhook.error });
-    // 자동 게시는 관리자 메뉴 기능이라 관리 비밀번호가 필요하다.
+    // 자동 게시는 모임장 메뉴 기능이라 관리 비밀번호가 필요하다.
     const denied = checkManagePin(event, body.managePin == null ? '' : String(body.managePin));
     if (denied) return sendJson(res, denied.status, denied.body);
 

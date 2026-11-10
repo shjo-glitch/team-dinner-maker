@@ -1,4 +1,4 @@
-// POST /api/events/:id/teams-export - 약속 요약을 Teams 채널 웹후크로 보낸다. (관리자 메뉴 › 자동 게시)
+// POST /api/events/:id/teams-export - 약속 요약을 Teams 채널 웹후크로 보낸다. (모임장 메뉴 › 자동 게시)
 // 웹후크 URL은 저장하지 않고 요청마다 받아 이번 전송에만 쓴다. 관리 비밀번호가 필요하다.
 import {
   TEAMS_EXPORT_COOLDOWN_MS,

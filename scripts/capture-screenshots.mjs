@@ -233,7 +233,7 @@ async function main() {
     await shot('04-result.png', { fullPage: true });
     console.log('04-result.png');
 
-    // ---------- 07. 관리자 메뉴 › 약속 파기 확인 ----------
+    // ---------- 07. 모임장 메뉴 › 약속 파기 확인 ----------
     await page.click('#admin-menu');
     await page.waitForFunction(() => document.getElementById('admin-dialog').open);
     await page.type('#admin-pin', MANAGE_PIN);

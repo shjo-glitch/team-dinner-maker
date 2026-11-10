@@ -604,7 +604,7 @@ function setSwitchState(button, on, label) {
   button.querySelector('.toggle-label').textContent = label;
 }
 
-// 관리자 메뉴·확정이 같은 관리 비밀번호 잠금을 공유하므로 버튼들을 함께 잠근다.
+// 모임장 메뉴·확정이 같은 관리 비밀번호 잠금을 공유하므로 버튼들을 함께 잠근다.
 function syncManageLockState() {
   clearTimeout(cancelButtonTimer);
   const adminButton = $('admin-menu');
@@ -621,7 +621,7 @@ function syncManageLockState() {
     setSwitchState(placeSwitch, Boolean(confirmedPlace()), remaining);
   } else {
     adminButton.disabled = false;
-    adminButton.textContent = '⚙️ 관리자 메뉴';
+    adminButton.textContent = '⚙️ 모임장 메뉴';
     // 스위치 ON = 확정됨(누르면 다시 정하기), OFF = 미확정(누르면 확정하기)
     setSwitchState(scheduleSwitch, isScheduleConfirmed(), isScheduleConfirmed() ? '일정 다시 정하기' : '일정 확정하기');
     setSwitchState(placeSwitch, Boolean(confirmedPlace()), confirmedPlace() ? '장소 다시 정하기' : '장소 확정하기');
@@ -646,7 +646,7 @@ function syncConfirmState() {
   if (isAdminSettingsOpen()) renderAdminSettings();
 }
 
-// 마감 여부가 바뀌는 순간(마감시간 도래, 관리자가 설정·해제) 투표 관련 화면을 다시 그린다.
+// 마감 여부가 바뀌는 순간(마감시간 도래, 모임장이 설정·해제) 투표 관련 화면을 다시 그린다.
 let lastVotingClosed = null;
 let voteDeadlineTimer = null;
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
@@ -691,8 +691,8 @@ function applyVoteClosedResponse(data) {
   return true;
 }
 
-// ---- 관리자 메뉴 ----
-// 1단계: 관리 비밀번호 확인(admin-auth) → 2단계: 관리자 설정(투표 마감시간 · 자동 게시 · 약속 파기).
+// ---- 모임장 메뉴 ----
+// 1단계: 관리 비밀번호 확인(admin-auth) → 2단계: 모임장 설정(투표 마감시간 · 자동 게시 · 약속 파기).
 // 확인된 비밀번호는 다이얼로그가 열려 있는 동안 메모리에만 두고, 닫으면 지운다. (저장하지 않음)
 let adminPin = null;
 let adminInfoTimer = null;
@@ -874,7 +874,7 @@ function showCancelSuccess() {
   $('cancel-success-home').focus();
 }
 
-// 관리자 설정 › 약속 파기하기 → 같은 줄에서 [취소][파기하기]로 바뀌어 한 번 더 확인 → 파기
+// 모임장 설정 › 약속 파기하기 → 같은 줄에서 [취소][파기하기]로 바뀌어 한 번 더 확인 → 파기
 const CANCEL_SUB_TEXT = '참여자 일정과 결과가 모두 삭제되며, 되돌릴 수 없어요.';
 
 function setCancelConfirming(confirming) {

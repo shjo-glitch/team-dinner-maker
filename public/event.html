@@ -32,7 +32,7 @@
         </ol>
         <div class="toolbar">
           <button type="button" class="btn ghost small" id="copy-link">🔗 참여 링크 복사</button>
-          <button type="button" class="btn ghost small" id="admin-menu">⚙️ 관리자 메뉴</button>
+          <button type="button" class="btn ghost small" id="admin-menu">⚙️ 모임장 메뉴</button>
         </div>
       </div>
 
@@ -312,7 +312,7 @@
       <!-- 1단계: 관리 비밀번호 확인 -->
       <form class="cancel-dialog-form" id="admin-auth-form" novalidate>
         <p class="section-kicker">ADMIN</p>
-        <h2 id="admin-dialog-title">관리자 메뉴</h2>
+        <h2 id="admin-dialog-title">모임장 메뉴</h2>
         <p class="cancel-dialog-copy">모임을 만든 사람만 들어갈 수 있어요. 약속을 만들 때 정한 관리 비밀번호를 입력해 주세요.</p>
         <div class="field">
           <label for="admin-pin">관리 비밀번호</label>
@@ -325,10 +325,10 @@
         </div>
       </form>
 
-      <!-- 2단계: 인증되면 보이는 관리자 설정. 항목마다 한 줄: 제목·부제목 | 액션 -->
+      <!-- 2단계: 인증되면 보이는 모임장 설정. 항목마다 한 줄: 제목·부제목 | 액션 -->
       <div class="cancel-dialog-form" id="admin-settings" hidden>
         <p class="section-kicker">ADMIN SETTINGS</p>
-        <h2 id="admin-settings-title">관리자 설정</h2>
+        <h2 id="admin-settings-title">모임장 설정</h2>
 
         <div class="admin-list">
           <form class="admin-row" id="admin-deadline-form" novalidate>

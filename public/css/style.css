@@ -301,7 +301,7 @@ input:focus-visible { border-color: var(--accent); background: #fffefa; box-shad
 .link-preview > .hint { margin-top: 0; }
 
 
-/* ---------- admin menu (비밀번호 확인 → 관리자 설정) ---------- */
+/* ---------- admin menu (비밀번호 확인 → 모임장 설정) ---------- */
 .admin-dialog { width: min(calc(100% - 32px), 720px); max-height: 88vh; border-color: rgba(156, 48, 36, 0.34); overflow: hidden; }
 .admin-dialog #admin-auth-form { max-width: 460px; margin: 0 auto; }
 .admin-dialog .section-kicker { color: var(--accent); }
@@ -454,7 +454,7 @@ input:focus-visible { border-color: var(--accent); background: #fffefa; box-shad
 .webhook-fields code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
 @media (max-width: 560px) {
-  /* 관리자 설정: 액션이 제목 아래로 내려오면 입력칸은 한 줄을 다 쓰고 버튼은 오른쪽에 모은다. */
+  /* 모임장 설정: 액션이 제목 아래로 내려오면 입력칸은 한 줄을 다 쓰고 버튼은 오른쪽에 모은다. */
   .admin-row-actions { width: 100%; }
   .admin-row-actions input[type='datetime-local'] { flex: 1 1 100%; width: auto; }
   /* 모바일: 화살표를 아래 페이지 줄 양끝에 놓는다. 숨길 때도 자리는 유지해 가운데 글자가 흔들리지 않게 한다. */

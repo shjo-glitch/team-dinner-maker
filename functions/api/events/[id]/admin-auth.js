@@ -1,4 +1,4 @@
-// POST /api/events/:id/admin-auth - 관리자 메뉴 진입용 관리 비밀번호 확인 { managePin }
+// POST /api/events/:id/admin-auth - 모임장 메뉴 진입용 관리 비밀번호 확인 { managePin }
 // 확정·파기와 같은 잠금 카운터를 쓴다. (여기서 틀린 횟수도 5회 잠금에 포함)
 import { checkManagePin, loadEvent, readJson } from '../../_shared.js';
 

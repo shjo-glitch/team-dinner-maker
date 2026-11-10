@@ -1,4 +1,4 @@
-// PUT /api/events/:id/vote-deadline - 투표 마감시간 설정·해제 (관리자 메뉴)
+// PUT /api/events/:id/vote-deadline - 투표 마감시간 설정·해제 (모임장 메뉴)
 // body: { managePin, voteDeadline: ISO 문자열 | null }  — null 이면 마감 해제
 import { checkManagePin, loadEvent, normalizeVoteDeadline, publicEvent, readJson, saveEvent } from '../../_shared.js';
 
